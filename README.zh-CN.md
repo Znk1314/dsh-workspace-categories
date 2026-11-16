@@ -1,7 +1,9 @@
 # dsh-workspace-categories
 
-把 **the agent runtime** 桌面端侧边栏的**工作区**归入自定义**分类**。
-每个分类是一个圆角矩形框，里面放着归入它的工作区和各自的会话；
+[English](README.md) · **简体中文**
+
+把 **DeepSeek Harness** 桌面端侧边栏的**工作区**归入自定义**分类**。
+每个分类是一条紧凑的淡色圆角行，下面挂着归入它的工作区和各自的会话；
 长按标题即可拖动归类与排序。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -27,7 +29,7 @@
 
 ## 环境要求
 
-- the agent runtime 桌面端 `>= 0.2.0-rc.2`。开发与验证于 `0.2.2-rc.3`。
+- DeepSeek Harness 桌面端 `>= 0.2.0-rc.2`。开发与验证于 `0.2.2-rc.3`。
 - 无需构建、无需联网、无额外依赖，插件就是纯 JavaScript 加一个清单文件。
 
 ## 安装

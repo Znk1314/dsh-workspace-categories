@@ -1,5 +1,7 @@
 # dsh-workspace-categories
 
+**English** · [简体中文](README.zh-CN.md)
+
 Group the **DeepSeek Harness** desktop sidebar's workspaces into custom
 categories. A category is a compact tinted row that holds its own workspaces and
 their sessions, and you file things by pressing and holding a title and dragging
