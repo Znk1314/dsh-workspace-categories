@@ -74,7 +74,10 @@ ok('the header row has a fixed height', /height:\s*var\(--wsx-header-h\)/.test(h
 /* One variable owns the shared box, so the label and the icons cannot drift. */
 ok('a shared box variable is declared', /--wsx-header-box:\s*24px/.test(header))
 ok('a nudge variable exists for optical correction', /--wsx-header-icon-nudge:/.test(header))
-
+/* A CJK glyph's ink sits below the em box's centre, so the label needs its own
+   sub-pixel lift; the two hooks stay independent. */
+ok('a label nudge variable exists', /--wsx-header-label-nudge:/.test(header))
+ok('the label nudge is negative (lifts the text)', /--wsx-header-label-nudge:\s*-\d/.test(header))
 const headerTitle = rule('.wsx-header-title')
 ok('the label box is the shared box height', /height:\s*var\(--wsx-header-box\)/.test(headerTitle))
 /* The label must claim the free space, or the icon group sits beside the text
@@ -84,6 +87,7 @@ ok('the label box centres its text', /align-items:\s*center/.test(headerTitle))
 /* The text must not rely on a baseline: its own line box is inside the flex box. */
 const headerLabel = rule('.wsx-header-label')
 ok('the label text carries its own line box', /line-height:\s*1\.2/.test(headerLabel))
+ok('the label applies its optical lift', /transform:\s*translateY\(var\(--wsx-header-label-nudge\)\)/.test(headerLabel))
 check('the label box declares no line-height of its own',
   /line-height:/.test(headerTitle), false)
 

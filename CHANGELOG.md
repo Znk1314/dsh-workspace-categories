@@ -27,6 +27,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The section label still sat a hair below the icon centres after the header
+  was geometrically centred. A CJK glyph's ink mass sits under the middle of its
+  em box, so the label now carries its own `--wsx-header-label-nudge`
+  (`translateY(-1px)`), independent of the icon column's hook. Neither nudge
+  changes the row height.
 - The three header controls sat immediately after the label instead of on the
   sidebar's right edge: the label was declared `flex: 0 1 auto`, so it shrank to
   its text width and left the free space unclaimed. It now grows
