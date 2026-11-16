@@ -13,6 +13,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remembered per workspace. A search re-opens folded workspaces and categories
   so a match is never hidden.
 
+### Changed
+
+- Categories and workspaces are now folded by clicking their icon instead of a
+  down chevron. A category shows its chosen glyph; a workspace shows an open
+  folder while expanded and a closed folder while folded.
+- Each category carries an icon and one of nine accent colours, picked from a
+  new *Icon and colour* dialog that previews the change as you click.
+- The three nesting levels (category glyph, workspace folder, session marker)
+  now share one column geometry, so their icons line up on a single vertical
+  line and both titles share one left edge.
+
 ### Fixed
 
 - Equal treatment of folding: categories could be collapsed while workspaces

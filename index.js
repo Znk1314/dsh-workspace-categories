@@ -20,7 +20,18 @@ import { dirname, join } from 'node:path'
 const DOC_ROUTE = '/api/workspace-categories.doc'
 
 /** Category accents the browser half can render; anything else falls back. */
-const COLORS = new Set(['brand', 'blue', 'green', 'amber', 'violet', 'rose', 'slate'])
+const COLORS = new Set(['ink', 'red', 'orange', 'amber', 'green', 'blue', 'violet', 'pink', 'slate'])
+
+/** Category glyphs the browser half can draw; keep in step with its GLYPHS table. */
+const GLYPHS = new Set([
+  'folder', 'dollar', 'book', 'graduation', 'pencil', 'pen', 'braces', 'terminal',
+  'music', 'cake', 'scissors', 'palette', 'stethoscope', 'gear', 'lotus', 'briefcase',
+  'chart', 'hourglass', 'dumbbell', 'list', 'scales', 'search', 'plane', 'globe',
+  'wrench', 'paw', 'flask', 'brain', 'heart', 'plant',
+])
+
+/** Glyph a category carries when the stored value is unknown. */
+const DEFAULT_GLYPH = 'folder'
 
 /** Empty document a first launch starts from. */
 const EMPTY_DOC = {
@@ -66,7 +77,8 @@ function normalizeDoc(value) {
     cleanCategories.push({
       id,
       name: typeof entry.name === 'string' && entry.name.trim() !== '' ? entry.name : 'Category',
-      color: COLORS.has(entry.color) ? entry.color : 'brand',
+      color: COLORS.has(entry.color) ? entry.color : 'ink',
+      icon: GLYPHS.has(entry.icon) ? entry.icon : DEFAULT_GLYPH,
       pinned: entry.pinned === true,
       collapsed: entry.collapsed === true,
       workspaceIds: workspaceIds

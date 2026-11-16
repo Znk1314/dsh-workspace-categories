@@ -9,7 +9,13 @@ const helpers = source.slice(
   source.indexOf('/* ------------------------------------------------------------------ */\n    /* Overlay host'),
 )
 const helperModule = { exports: {} }
-const ctx = vm.createContext({ module: helperModule, console, COLORS: ['brand', 'blue', 'green', 'amber', 'violet', 'rose', 'slate'] })
+const ctx = vm.createContext({
+  module: helperModule,
+  console,
+  COLORS: ['ink', 'red', 'orange', 'amber', 'green', 'blue', 'violet', 'pink', 'slate'],
+  GLYPH_IDS: ['folder'],
+  DEFAULT_GLYPH: 'folder',
+})
 vm.runInContext(helpers + '\nmodule.exports = { moved, inserted, assignWorkspace, withoutWorkspace, reorderCategory, mintCategoryId, normalize }', ctx)
 const { moved, inserted, assignWorkspace, withoutWorkspace, reorderCategory, mintCategoryId, normalize } = helperModule.exports
 

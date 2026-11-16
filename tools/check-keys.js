@@ -5,7 +5,7 @@ const text = fs.readFileSync(process.argv[2], 'utf8')
 const used = new Set()
 for (const match of text.matchAll(/(?<![A-Za-z0-9_$.])t\('([a-zA-Z][a-zA-Z0-9_.]+)'/g)) used.add(match[1])
 // Dynamic colour keys: t(`color.${color}`)
-for (const color of ['brand', 'blue', 'green', 'amber', 'violet', 'rose', 'slate']) used.add('color.' + color)
+for (const color of ['ink', 'red', 'orange', 'amber', 'green', 'blue', 'violet', 'pink', 'slate']) used.add('color.' + color)
 
 const zhStart = text.indexOf('const zh = {')
 const enStart = text.indexOf('const en = {')

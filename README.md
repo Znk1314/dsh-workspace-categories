@@ -13,10 +13,11 @@ dragging it where you want it.
 ## Features
 
 - **Categories as rounded boxes** — group workspaces so related ones sit together.
+- **Fold by icon** — click a category's icon to collapse the category, or a workspace's folder to collapse just that workspace (closed folder while folded, open folder while shown).
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
 - **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
 - **Category ordering and pinning** — drag a category header, or use Move up / Move down; pinned categories always render first.
-- **Seven accent colours**, rename, and delete with confirmation.
+- **Pick an icon and a colour** — 30 line glyphs and 9 swatches per category, chosen from one picker that previews the change live.
 - **Fold either level** — collapse a whole category, or just one workspace's sessions.
 - **Nothing disappears** — workspaces with no category fall into an *Unassigned* box, and sessions with no workspace into an *Other sessions* box.
 - **Keeps built-in power features** — search (auto-expands folded boxes), archived-row filtering, a flat "one list" view, add/rename/delete workspace, and the full right-click session menu.
@@ -50,9 +51,9 @@ manifest layout so `dsh plugin add` resolves it.
 | Re-order inside a box | press and hold, then drop on the upper/lower half of another workspace row; the box tail shows an insertion line |
 | Re-order categories | press and hold a category header, or its **⋯** menu → *Move up* / *Move down* |
 | Pin a category | category **⋯** menu → *Pin category* (pinned boxes stay on top) |
-| Change colour | category **⋯** menu → one of seven accents |
-| Collapse / expand a category | the triangle at the left of a category header |
-| Collapse / expand one workspace | the triangle at the left of its row, or its **⋯** menu → *Collapse workspace* |
+| Change icon or colour | category **⋯** menu → *Icon and colour*, then pick a glyph and a swatch |
+| Collapse / expand a category | click the category's icon; expand shows it open, collapse hides its workspaces |
+| Collapse / expand one workspace | click its folder icon (open folder = expanded, closed = folded), or its **⋯** menu → *Collapse workspace* |
 | Remove a workspace from a category | drag it into *Unassigned*, or its **⋯** menu → *Remove from category* |
 | Delete a category | category **⋯** menu → *Delete category* (its workspaces return to *Unassigned*; no session is deleted) |
 | Search / filter / flat view | the search box and the sliders button at the right |
@@ -90,7 +91,7 @@ notice clears once a write succeeds.
 {
   "version": 1,
   "categories": [
-    { "id": "c1", "name": "Client work", "color": "blue",
+    { "id": "c1", "name": "Client work", "color": "blue", "icon": "briefcase",
       "pinned": true, "collapsed": false, "workspaceIds": ["w1", "w2"] }
   ],
   "view": { "mode": "categories", "archived": "default" },
@@ -99,9 +100,11 @@ notice clears once a write succeeds.
 }
 ```
 
-`color` accepts `brand | blue | green | amber | violet | rose | slate`;
+`color` accepts `ink | red | orange | amber | green | blue | violet | pink | slate`;
 `view.mode` accepts `categories | flat`; `view.archived` accepts
-`default | show | only`; `collapsedWorkspaces` lists folded workspace ids. The Host repairs malformed or hostile input, so a
+`default | show | only`; `collapsedWorkspaces` lists folded workspace ids; `icon` names one of the 30 built-in glyphs
+(`folder`, `book`, `graduation`, `briefcase`, `terminal`, `palette`, `brain`, `plant`, …) and falls back to `folder`.
+The Host repairs malformed or hostile input, so a
 damaged file never takes the sidebar down.
 
 ## How it works

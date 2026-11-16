@@ -58,7 +58,7 @@ const payload = {
   version: 1,
   categories: [
     { id: 'c1', name: 'Client work', color: 'blue', pinned: true, collapsed: false, workspaceIds: ['w2', 'w1'] },
-    { id: 'c2', name: 'Side projects', color: 'rose', pinned: false, collapsed: true, workspaceIds: ['w3'] },
+    { id: 'c2', name: 'Side projects', color: 'pink', pinned: false, collapsed: true, workspaceIds: ['w3'] },
   ],
   view: { mode: 'categories', archived: 'show' },
   unassignedCollapsed: true,
@@ -72,7 +72,7 @@ const put = await route.fetch(new Request('http://localhost/api/workspace-catego
 check('PUT status', put.status, 200)
 const stored = await put.json()
 check('PUT echoes categories', stored.categories.map(c => [c.id, c.name, c.color, c.pinned, c.collapsed, c.workspaceIds]),
-  [['c1', 'Client work', 'blue', true, false, ['w2', 'w1']], ['c2', 'Side projects', 'rose', false, true, ['w3']]])
+  [['c1', 'Client work', 'blue', true, false, ['w2', 'w1']], ['c2', 'Side projects', 'pink', false, true, ['w3']]])
 check('PUT keeps view', stored.view, { mode: 'categories', archived: 'show' })
 
 const reread = await (await route.fetch(new Request('http://localhost/api/workspace-categories.doc'))).json()
@@ -100,7 +100,8 @@ const hostile = await route.fetch(new Request('http://localhost/api/workspace-ca
 check('hostile PUT status', hostile.status, 200)
 const repaired = await hostile.json()
 check('duplicate ids collapsed', repaired.categories.map(c => c.id), ['dup'])
-check('unknown colour normalised', repaired.categories[0].color, 'brand')
+check('unknown colour normalised', repaired.categories[0].color, 'ink')
+check('unknown icon normalised', repaired.categories[0].icon, 'folder')
 check('member list cleaned', repaired.categories[0].workspaceIds, ['w1'])
 check('unknown enums normalised', repaired.view, { mode: 'categories', archived: 'default' })
 check('missing collapsed list defaults to empty', repaired.collapsedWorkspaces, [])

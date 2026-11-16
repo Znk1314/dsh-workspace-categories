@@ -49,8 +49,52 @@ window.__ModuleLoader__.load({
     const UNASSIGNED = '__unassigned__'
     const OTHER_SESSIONS = '__other__'
 
-    /** Category accent choices; CSS maps each name to an accent custom property. */
-    const COLORS = ['brand', 'blue', 'green', 'amber', 'violet', 'rose', 'slate']
+    /** Accent swatches a category may carry; the name is also its CSS class suffix. */
+    const COLORS = ['ink', 'red', 'orange', 'amber', 'green', 'blue', 'violet', 'pink', 'slate']
+
+    /**
+     * Selectable category glyphs, in the order the picker shows them. Each entry
+     * is one or more SVG paths drawn on the shared 16-unit grid.
+     */
+    const GLYPHS = {
+      folder: ['M2 5.6A1.6 1.6 0 0 1 3.6 4h2.1l1.2 1.5h5.5A1.6 1.6 0 0 1 14 7.1v4.3A1.6 1.6 0 0 1 12.4 13H3.6A1.6 1.6 0 0 1 2 11.4z'],
+      dollar: ['M8 2.4v11.2', 'M11 5.2a2.6 2.6 0 0 0-2.6-1.3C6.6 3.9 5.6 4.7 5.6 5.9c0 1.4 1.1 1.9 2.6 2.2 1.7.4 2.8.9 2.8 2.3 0 1.3-1.1 2.1-2.9 2.1A2.9 2.9 0 0 1 5.2 11.2'],
+      book: ['M3.2 3.4h6.1A2.3 2.3 0 0 1 11.6 5.7v7.9A2.3 2.3 0 0 0 9.3 11.3H3.2z', 'M12.8 3.4H9.3'],
+      graduation: ['M2.2 6.4 8 3.6l5.8 2.8L8 9.2z', 'M4.6 7.6v3.1c0 1 1.5 1.8 3.4 1.8s3.4-.8 3.4-1.8V7.6', 'M13.8 6.6v3.2'],
+      pencil: ['M10.9 2.6 13.4 5.1 5.6 12.9 2.5 13.5l.6-3.1z', 'M9.8 3.7l2.5 2.5'],
+      pen: ['M3.2 12.8c.4-2.2 1.6-4 3.4-5.6L11.4 3.3a1.7 1.7 0 0 1 2.4 2.4L9.9 10.5c-1.6 1.8-3.4 3-5.6 3.4z', 'M3.2 12.8l3.4-1'],
+      braces: ['M6.2 2.8c-1.6 0-2 .9-2 2.2v1.4c0 1-.6 1.6-1.4 1.6.8 0 1.4.6 1.4 1.6V11c0 1.3.4 2.2 2 2.2', 'M9.8 2.8c1.6 0 2 .9 2 2.2v1.4c0 1 .6 1.6 1.4 1.6-.8 0-1.4.6-1.4 1.6V11c0 1.3-.4 2.2-2 2.2'],
+      terminal: ['M2.4 3.4h11.2a1.2 1.2 0 0 1 1.2 1.2v6.8a1.2 1.2 0 0 1-1.2 1.2H2.4a1.2 1.2 0 0 1-1.2-1.2V4.6a1.2 1.2 0 0 1 1.2-1.2z', 'M4.2 6.6 5.9 8.4 4.2 10.2', 'M7.4 10.4h3'],
+      music: ['M6.2 12.2V4.4l6-1.3v7.6', 'M3.3 12.9a2.1 1.7 0 1 0 4.2 0 2.1 1.7 0 1 0-4.2 0z', 'M9.3 11.6a2.1 1.7 0 1 0 4.2 0 2.1 1.7 0 1 0-4.2 0z'],
+      cake: ['M2.4 7.4h11.2v4.4a1.6 1.6 0 0 1-1.6 1.6H4a1.6 1.6 0 0 1-1.6-1.6z', 'M2.4 10.4c1.4 0 1.4 1.1 2.8 1.1s1.4-1.1 2.8-1.1 1.4 1.1 2.8 1.1 1.4-1.1 2.8-1.1', 'M5.4 7.4V5.8M8 7.4V5.8M10.6 7.4V5.8', 'M5.4 4.4v.6M8 4.4v.6M10.6 4.4v.6'],
+      scissors: ['M4.6 2.6 11.4 11.6', 'M11.4 2.6 4.6 11.6', 'M3.1 12.4a1.9 1.9 0 1 0 3.8 0 1.9 1.9 0 1 0-3.8 0z', 'M9.1 12.4a1.9 1.9 0 1 0 3.8 0 1.9 1.9 0 1 0-3.8 0z'],
+      palette: ['M8 2.4a5.6 5.6 0 0 0 0 11.2c1 0 1.4-.7 1.4-1.4 0-.9.6-1.4 1.4-1.4h1.6a1.8 1.8 0 0 0 1.8-1.8A5.6 5.6 0 0 0 8 2.4z', 'M5.5 6.2h.01M8 4.9h.01M10.5 6.2h.01M4.9 8.6h.01'],
+      stethoscope: ['M4.4 2.4v4.2a3.2 3.2 0 0 0 6.4 0V2.4', 'M4.4 2.4h-1.2M10.8 2.4H12', 'M7.6 9.8v1.3a3 3 0 0 0 6 0v-.9'],
+      gear: ['M6.9 2.4h2.2l.3 1.5 1.4.8 1.4-.6 1.1 1.9-1.1 1 .1 1.6 1.2.9-.9 2-1.5-.4-1.3.9-.2 1.5H7.4l-.3-1.5-1.3-.8-1.4.5-1-1.9 1.1-1v-1.6l-1.2-.9.9-2 1.5.4 1.4-.8z', 'M8 9.7a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4z'],
+      lotus: ['M8 3.2c1.3 1.1 2 2.3 2 3.6 0 .8-.4 1.5-1 2', 'M8 3.2c-1.3 1.1-2 2.3-2 3.6 0 .8.4 1.5 1 2', 'M2.8 7.4c1.7-.4 3 .1 4 1.2', 'M13.2 7.4c-1.7-.4-3 .1-4 1.2', 'M8 8.6c1.9 0 3.4 1.6 3.4 3.6H4.6c0-2 1.5-3.6 3.4-3.6z'],
+      briefcase: ['M2.4 6h11.2v5.4a1.4 1.4 0 0 1-1.4 1.4H3.8a1.4 1.4 0 0 1-1.4-1.4z', 'M6 6V4.6a1.2 1.2 0 0 1 1.2-1.2h1.6A1.2 1.2 0 0 1 10 4.6V6'],
+      chart: ['M3.4 13V8.2', 'M8 13V3.6', 'M12.6 13V6.4', 'M2.4 13h11.2'],
+      hourglass: ['M3.6 2.6h8.8', 'M3.6 13.4h8.8', 'M4.4 2.6v1.6c0 1.6 1.6 2.6 3.6 3.8-2 1.2-3.6 2.2-3.6 3.8v1.6', 'M11.6 2.6v1.6c0 1.6-1.6 2.6-3.6 3.8 2 1.2 3.6 2.2 3.6 3.8v1.6'],
+      dumbbell: ['M2.4 6.4v3.2M4.6 4.8v6.4M11.4 4.8v6.4M13.6 6.4v3.2', 'M4.6 8h6.8'],
+      list: ['M5.6 4.4h8', 'M5.6 8h8', 'M5.6 11.6h8', 'M2.8 4.4h.01M2.8 8h.01M2.8 11.6h.01'],
+      scales: ['M8 2.6v10.8', 'M4 13.4h8', 'M2.4 6.2 8 4.4l5.6 1.8', 'M2.4 6.2 1 9.4h2.8z', 'M13.6 6.2 12.2 9.4h2.8z'],
+      search: ['M7.2 12.4a5.2 5.2 0 1 0 0-10.4 5.2 5.2 0 0 0 0 10.4z', 'M11 11l3 3'],
+      plane: ['M2.4 8.2 13.6 2.6l-2.4 10.8-3.2-3.6z', 'M8 9.8 6.4 13'],
+      globe: ['M8 13.6a5.6 5.6 0 1 0 0-11.2 5.6 5.6 0 0 0 0 11.2z', 'M2.6 8h10.8', 'M8 2.4c1.6 1.6 2.4 3.5 2.4 5.6S9.6 12 8 13.6c-1.6-1.6-2.4-3.5-2.4-5.6S6.4 4 8 2.4z'],
+      wrench: ['M10.6 2.6a3.2 3.2 0 0 0-3 4.4l-4.2 4.2a1.4 1.4 0 0 0 2 2l4.2-4.2a3.2 3.2 0 0 0 4.4-3l-1.8 1.8-1.8-1.8z'],
+      paw: ['M4.6 8.4c-1 0-1.6-1-1.6-2.2S3.6 4 4.6 4s1.6 1 1.6 2.2S5.6 8.4 4.6 8.4z', 'M11.4 8.4c-1 0-1.6-1-1.6-2.2S10.4 4 11.4 4s1.6 1 1.6 2.2-1 2.2-1.6 2.2z', 'M7.2 6.6c-.9 0-1.5-.9-1.5-2S6.3 2.6 7.2 2.6s1.5.9 1.5 2-.6 2-1.5 2z', 'M8 8.4c1.9 0 3.4 1.3 3.4 2.9 0 1.2-.9 1.9-2 1.9-.7 0-1-.3-1.4-.3s-.7.3-1.4.3c-1.1 0-2-.7-2-1.9C4.6 9.7 6.1 8.4 8 8.4z'],
+      flask: ['M6.2 2.6h3.6', 'M6.8 2.6v3.6L3.4 12a1.3 1.3 0 0 0 1.1 2h7a1.3 1.3 0 0 0 1.1-2L9.2 6.2V2.6', 'M4.8 9.6h6.4'],
+      brain: ['M6.4 2.6A2.4 2.4 0 0 0 4 5a2.2 2.2 0 0 0-.6 4 2.2 2.2 0 0 0 1.6 3.6 2 2 0 0 0 3.8-.6V4a1.4 1.4 0 0 0-2.4-1.4z', 'M9.6 2.6A2.4 2.4 0 0 1 12 5a2.2 2.2 0 0 1 .6 4 2.2 2.2 0 0 1-1.6 3.6 2 2 0 0 1-3.8-.6V4a1.4 1.4 0 0 1 2.4-1.4z'],
+      heart: ['M8 13.2S2.6 10 2.6 6.4A3 3 0 0 1 8 4.6a3 3 0 0 1 5.4 1.8c0 3.6-5.4 6.8-5.4 6.8z'],
+      plant: ['M8 13.4V7.2', 'M8 7.2c0-2 1.4-3.6 3.4-3.6 0 2-1.4 3.6-3.4 3.6z', 'M8 9c0-2-1.4-3.6-3.4-3.6 0 2 1.4 3.6 3.4 3.6z', 'M5.4 13.4h5.2'],
+    }
+
+    /** Glyph ids in picker order. */
+    const GLYPH_IDS = Object.keys(GLYPHS)
+
+    /** Icon a category carries when the stored value is unknown. */
+    const DEFAULT_GLYPH = 'folder'
+
 
     /** Document a first launch renders before the Host answers. */
     const EMPTY_DOC = Object.freeze({
@@ -67,11 +111,13 @@ window.__ModuleLoader__.load({
 
     /**
      * Build one 16-unit stroke glyph.
-     * @param path - SVG path data drawn in the current colour.
+     * @param paths - one SVG path string, or a list drawn as separate strokes.
      * @param size - rendered square size in CSS pixels.
+     * @param className - extra class on the root element.
      * @returns the glyph element.
      */
-    function glyph(path, size) {
+    function glyph(paths, size, className) {
+      const list = Array.isArray(paths) ? paths : [paths]
       return h('svg', {
         viewBox: '0 0 16 16',
         width: size ?? 14,
@@ -83,16 +129,34 @@ window.__ModuleLoader__.load({
         strokeLinejoin: 'round',
         'aria-hidden': 'true',
         focusable: 'false',
-        className: 'wsx-glyph',
-      }, h('path', { d: path }))
+        className: className === undefined ? 'wsx-glyph' : `wsx-glyph ${className}`,
+      }, list.map((d, index) => h('path', { key: index, d })))
     }
 
+    /**
+     * Render one selectable category glyph by id.
+     * @param id - glyph id, or an unknown value that falls back to the folder.
+     * @param size - rendered square size in CSS pixels.
+     * @returns the glyph element.
+     */
+    function glyphById(id, size) {
+      const paths = GLYPHS[id] ?? GLYPHS[DEFAULT_GLYPH]
+      return glyph(paths, size)
+    }
+
+    /** Closed and open folder shapes; the same outline, opened at the top-right. */
+    const FOLDER_CLOSED = 'M2 5.6A1.6 1.6 0 0 1 3.6 4h2.1l1.2 1.5h5.5A1.6 1.6 0 0 1 14 7.1v4.3A1.6 1.6 0 0 1 12.4 13H3.6A1.6 1.6 0 0 1 2 11.4z'
+    const FOLDER_OPEN = [
+      'M2 11.4V5.6A1.6 1.6 0 0 1 3.6 4h2.1l1.2 1.5h5.5A1.6 1.6 0 0 1 14 7.1v.9',
+      'M2 11.4 3.9 7.6A1.4 1.4 0 0 1 5.2 6.8h8.1a1 1 0 0 1 .9 1.4l-1.7 4a1.4 1.4 0 0 1-1.3.8H3.6A1.6 1.6 0 0 1 2 11.4z',
+    ]
+
     const ICON = {
-      chevron: size => glyph('M6 4l4 4-4 4', size),
-      folder: size => glyph('M2 5.5A1.5 1.5 0 0 1 3.5 4h2.2l1.1 1.4h5.7A1.5 1.5 0 0 1 14 6.9v4.6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z', size),
+      folderClosed: (size, className) => glyph(FOLDER_CLOSED, size, className),
+      folderOpen: (size, className) => glyph(FOLDER_OPEN, size, className),
       plus: size => glyph('M8 3.5v9M3.5 8h9', size),
       dots: size => glyph('M3 8h.01M8 8h.01M13 8h.01', size),
-      search: size => glyph('M7.2 12.4a5.2 5.2 0 1 0 0-10.4 5.2 5.2 0 0 0 0 10.4zM11 11l2.4 2.4', size),
+      search: size => glyph('M7.2 12.4a5.2 5.2 0 1 0 0-10.4 5.2 5.2 0 0 0 0 10.4M11 11l2.4 2.4', size),
       sliders: size => glyph('M3 5.5h10M3 10.5h10M6 3.5v4M10 8.5v4', size),
       close: size => glyph('M4.5 4.5l7 7M11.5 4.5l-7 7', size),
       pin: size => glyph('M8 2.5l1.5 3.4 3.6.4-2.7 2.4.8 3.6L8 10.6l-3.2 1.7.8-3.6L2.9 6.3l3.6-.4z', size),
@@ -139,7 +203,8 @@ window.__ModuleLoader__.load({
         categories: (source.categories ?? []).map(category => ({
           id: category.id,
           name: category.name,
-          color: COLORS.includes(category.color) ? category.color : 'brand',
+          color: COLORS.includes(category.color) ? category.color : 'ink',
+          icon: GLYPH_IDS.includes(category.icon) ? category.icon : DEFAULT_GLYPH,
           pinned: category.pinned === true,
           collapsed: category.collapsed === true,
           workspaceIds: [...(category.workspaceIds ?? [])],
@@ -359,13 +424,56 @@ window.__ModuleLoader__.load({
       }, [request])
       if (request === null) return null
       const isName = request.kind === 'name'
+      const isAppearance = request.kind === 'appearance'
       const blocked = busy || (isName && value.trim() === '')
+
+      /**
+       * One appearance picker: a swatch grid and a glyph grid. Selecting either
+       * applies immediately, because the change is reversible and the dialog
+       * stays open so both axes can be set in one visit.
+       * @returns the picker body.
+       */
+      const appearanceBody = () => {
+        const draft = request.draft
+        return h('div', { className: 'wsx-appearance' },
+          h('div', { className: 'wsx-appearance-label' }, t('dialog.color')),
+          h('div', { className: 'wsx-swatches', role: 'radiogroup', 'aria-label': t('dialog.color') },
+            COLORS.map(color => h('button', {
+              key: color,
+              type: 'button',
+              role: 'radio',
+              'aria-checked': draft.color === color,
+              'aria-label': t(`color.${color}`),
+              title: t(`color.${color}`),
+              className: draft.color === color ? 'wsx-swatch wsx-swatch-on' : 'wsx-swatch',
+              onClick: () => request.onDraft({ ...draft, color }),
+            }, h('span', { className: `wsx-swatch-fill wsx-tone-${color}` })))),
+          h('div', { className: 'wsx-appearance-label' }, t('dialog.icon')),
+          h('div', { className: 'wsx-glyphgrid', role: 'radiogroup', 'aria-label': t('dialog.icon') },
+            GLYPH_IDS.map(id => h('button', {
+              key: id,
+              type: 'button',
+              role: 'radio',
+              'aria-checked': draft.icon === id,
+              'aria-label': t('dialog.iconName'),
+              title: id,
+              className: draft.icon === id ? 'wsx-glyphcell wsx-glyphcell-on' : 'wsx-glyphcell',
+              onClick: () => request.onDraft({ ...draft, icon: id }),
+            }, glyphById(id, 16)))))
+      }
+
       return h(Overlay, null,
         h('div', {
           className: 'wsx-scrim',
           onMouseDown: (event) => { if (event.target === event.currentTarget) onCancel() },
         },
-        h('div', { className: 'wsx-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': request.title, ref },
+        h('div', {
+          className: isAppearance ? 'wsx-dialog wsx-dialog-wide' : 'wsx-dialog',
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-label': request.title,
+          ref,
+        },
           h('div', { className: 'wsx-dialog-title' }, request.title),
           isName
             ? h('input', {
@@ -383,13 +491,15 @@ window.__ModuleLoader__.load({
                 if (!blocked) onSettle(value)
               },
             })
-            : h('div', { className: 'wsx-dialog-body' }, request.body),
+            : isAppearance
+              ? appearanceBody()
+              : h('div', { className: 'wsx-dialog-body' }, request.body),
           h('div', { className: 'wsx-dialog-actions' },
             h('button', { type: 'button', className: 'wsx-btn', onClick: onCancel, disabled: busy }, t('dialog.cancel')),
             h('button', {
               type: 'button',
               className: request.danger === true ? 'wsx-btn wsx-btn-danger' : 'wsx-btn wsx-btn-primary',
-              'data-wsx-autofocus': isName ? undefined : '',
+              'data-wsx-autofocus': isName || isAppearance ? undefined : '',
               onClick: () => { if (!blocked) onSettle(value) },
               disabled: blocked,
             }, request.confirmLabel)))))
@@ -847,13 +957,27 @@ window.__ModuleLoader__.load({
             disabled: at === -1 || at >= group.length - 1,
             run: () => { moveCategoryBy(category.id, 1) },
           },
-          { id: 'color-sep', separator: true },
-          ...COLORS.map(color => ({
-            id: `color-${color}`,
-            label: t(`color.${color}`),
-            checked: category.color === color,
-            run: () => { actions.setCategoryColor(category.id, color) },
-          })),
+          { id: 'look-sep', separator: true },
+          {
+            id: 'appearance',
+            label: t('menu.appearance'),
+            icon: glyphById(category.icon, 12),
+            run: () => {
+              setDialog({
+                kind: 'appearance',
+                title: t('dialog.appearance'),
+                confirmLabel: t('dialog.done'),
+                draft: { color: category.color, icon: category.icon },
+                onDraft: (draft) => {
+                  /* Apply on each pick so the box updates behind the dialog. */
+                  actions.setCategoryColor(category.id, draft.color)
+                  actions.setCategoryIcon(category.id, draft.icon)
+                  setDialog(current => (current === null ? current : { ...current, draft }))
+                },
+                onCommit: () => { /* Every pick was already applied. */ },
+              })
+            },
+          },
           { id: 'delete-sep', separator: true },
           {
             id: 'delete',
@@ -1072,6 +1196,8 @@ window.__ModuleLoader__.load({
             ? undefined
             : event => openMenuAt(event, workspaceMenuItems(workspace)),
         },
+        /* The folder itself is the fold control: closed while folded, open while
+           expanded, which is the affordance the row's own icon already implies. */
         h('button', {
           type: 'button',
           className: 'wsx-workspace-fold',
@@ -1082,9 +1208,8 @@ window.__ModuleLoader__.load({
             event.stopPropagation()
             actions.toggleWorkspaceCollapsed(key)
           },
-        }, h('span', { className: folded ? 'wsx-chevron' : 'wsx-chevron wsx-chevron-open' },
-          ICON.chevron(11))),
-        h('span', { className: 'wsx-workspace-icon', 'aria-hidden': 'true' }, ICON.folder(13)),
+        }, h('span', { className: 'wsx-workspace-icon' },
+          folded ? ICON.folderClosed(14) : ICON.folderOpen(14))),
         h('span', { className: 'wsx-workspace-title' },
           workspace === undefined ? t('section.otherSessions') : workspaceTitle(workspace)),
         h('span', { className: 'wsx-workspace-count' }, String(rows.length)),
@@ -1167,10 +1292,13 @@ window.__ModuleLoader__.load({
           className: 'wsx-cat-fold',
           'aria-expanded': !folded,
           'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
-          onClick: () => { actions.toggleCategoryCollapsed(category.id) },
-        }, h('span', { className: folded ? 'wsx-chevron' : 'wsx-chevron wsx-chevron-open' },
-          ICON.chevron(12))),
-        h('span', { className: 'wsx-cat-dot', 'aria-hidden': 'true' }),
+          title: folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+          onClick: (event) => {
+            event.stopPropagation()
+            actions.toggleCategoryCollapsed(category.id)
+          },
+        }, h('span', { className: `wsx-cat-glyph wsx-tone-${category.color}` },
+          glyphById(category.icon, 16))),
         h('span', { className: 'wsx-cat-name' }, category.name),
         h('span', { className: 'wsx-cat-badge' }, String(members.length)),
         category.pinned
@@ -1211,10 +1339,10 @@ window.__ModuleLoader__.load({
             className: 'wsx-cat-fold',
             'aria-expanded': !folded,
             'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+            title: folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
             onClick: () => { actions.toggleUnassignedCollapsed() },
-          }, h('span', { className: folded ? 'wsx-chevron' : 'wsx-chevron wsx-chevron-open' },
-            ICON.chevron(12))),
-          h('span', { className: 'wsx-cat-dot', 'aria-hidden': 'true' }),
+          }, h('span', { className: 'wsx-cat-glyph wsx-tone-slate' },
+            glyphById('list', 16))),
           h('span', { className: 'wsx-cat-name' }, t('section.unassigned')),
           h('span', { className: 'wsx-cat-badge' }, String(unassigned.length))),
         folded
@@ -1233,7 +1361,8 @@ window.__ModuleLoader__.load({
           className: 'wsx-cat wsx-cat-slate',
           'data-wsx-cat': OTHER_SESSIONS,
         }, h('div', { className: 'wsx-cat-head' },
-          h('span', { className: 'wsx-cat-dot', 'aria-hidden': 'true' }),
+          h('span', { className: 'wsx-cat-glyph wsx-tone-slate', 'aria-hidden': 'true' },
+            glyphById('list', 16)),
           h('span', { className: 'wsx-cat-name' }, t('section.otherSessions')),
           h('span', { className: 'wsx-cat-badge' }, String(rows.length))),
         h('div', { className: 'wsx-cat-body' },
@@ -1288,7 +1417,7 @@ window.__ModuleLoader__.load({
             'aria-label': t('section.workspaces'),
             title: t('section.workspaces'),
             onClick: expandSidebar,
-          }, ICON.folder(16)),
+          }, ICON.folderClosed(18)),
           h('button', {
             type: 'button',
             className: 'wsx-rail-btn',
@@ -1350,7 +1479,7 @@ window.__ModuleLoader__.load({
               'aria-label': t('actions.addWorkspace'),
               title: t('actions.addWorkspace'),
               onClick: addWorkspace,
-            }, ICON.folder(14)),
+            }, ICON.folderClosed(16)),
             h('button', {
               type: 'button',
               className: 'wsx-icon-btn',
@@ -1541,18 +1670,22 @@ window.__ModuleLoader__.load({
 }
 .wsx-cat-drop { border-color: var(--wsx-accent); box-shadow: 0 0 0 1px var(--wsx-accent); }
 .wsx-cat-dragging { opacity: 0.5; }
-.wsx-cat-blue { --wsx-accent: var(--dsw-static-blue-500); }
-.wsx-cat-green { --wsx-accent: var(--dsw-alias-state-success-primary); }
-.wsx-cat-amber { --wsx-accent: var(--dsw-alias-state-warn-primary); }
-.wsx-cat-violet { --wsx-accent: var(--dsw-static-violet-600); }
-.wsx-cat-rose { --wsx-accent: var(--dsw-static-red-500); }
-.wsx-cat-slate { --wsx-accent: var(--dsw-alias-state-idle-primary); }
+/* Accent tones: one class tints the category's glyph and its drop marker. */
+.wsx-tone-ink { color: var(--dsw-alias-label-primary); --wsx-accent: var(--dsw-alias-label-primary); }
+.wsx-tone-red { color: var(--dsw-static-red-500); --wsx-accent: var(--dsw-static-red-500); }
+.wsx-tone-orange { color: #f97316; --wsx-accent: #f97316; }
+.wsx-tone-amber { color: var(--dsw-static-amber-500); --wsx-accent: var(--dsw-static-amber-500); }
+.wsx-tone-green { color: var(--dsw-static-green-500); --wsx-accent: var(--dsw-static-green-500); }
+.wsx-tone-blue { color: var(--dsw-static-blue-500); --wsx-accent: var(--dsw-static-blue-500); }
+.wsx-tone-violet { color: var(--dsw-static-violet-600); --wsx-accent: var(--dsw-static-violet-600); }
+.wsx-tone-pink { color: #ec4899; --wsx-accent: #ec4899; }
+.wsx-tone-slate { color: var(--dsw-alias-label-tertiary); --wsx-accent: var(--dsw-alias-state-idle-primary); }
 .wsx-cat-head {
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 2px 0 4px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 2px 0 2px;
   border-radius: var(--dsw-radius-sm);
   -webkit-user-select: none;
   user-select: none;
@@ -1560,28 +1693,23 @@ window.__ModuleLoader__.load({
 .wsx-cat-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-grab { cursor: grab; }
 .wsx-grab:active { cursor: grabbing; }
+/* The category glyph is the fold control: it is always visible and coloured. */
 .wsx-cat-fold {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
 }
-.wsx-chevron { display: inline-flex; transition: transform 120ms ease; }
-.wsx-chevron-open { transform: rotate(90deg); }
-.wsx-cat-dot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--wsx-accent);
-}
+.wsx-cat-fold:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-cat-fold:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.wsx-cat-glyph { display: inline-flex; align-items: center; justify-content: center; }
 .wsx-cat-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -1607,14 +1735,13 @@ window.__ModuleLoader__.load({
 .wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 2px 2px; }
 .wsx-workspace {
   /* One geometry owner for both nesting levels. The workspace row puts
-     [fold][folder][title] on these columns; a session row then starts its
-     marker on the folder column and its title on the title column, so the
-     status dot sits exactly under the folder icon. */
-  --wsx-row-pad: 6px;
-  --wsx-fold-w: 14px;
-  --wsx-icon-w: 13px;
-  --wsx-row-gap: var(--dsh-sidebar-label-gap, 6px);
-  --wsx-icon-col: calc(var(--wsx-row-pad) + var(--wsx-fold-w) + var(--wsx-row-gap));
+     [folder][title] inside a box; a session row then starts its marker on the
+     folder column and its title on the title column, so the status dot sits
+     exactly under the folder icon, and section glyphs above line up too. */
+  --wsx-row-pad: 2px;
+  --wsx-icon-w: 16px;
+  --wsx-row-gap: 6px;
+  --wsx-icon-col: calc(var(--wsx-row-pad) + 4px);
   --wsx-title-col: calc(var(--wsx-icon-col) + var(--wsx-icon-w) + var(--wsx-row-gap));
   padding: 1px 0;
   border-radius: var(--dsw-radius-md);
@@ -1623,7 +1750,7 @@ window.__ModuleLoader__.load({
 .wsx-drop-before { box-shadow: inset 0 2px 0 0 var(--wsx-accent); }
 .wsx-append-line {
   height: 2px;
-  margin: 1px 0 1px 6px;
+  margin: 1px 0 1px var(--wsx-title-col);
   border-radius: 1px;
   background: var(--wsx-accent);
 }
@@ -1631,28 +1758,29 @@ window.__ModuleLoader__.load({
   display: flex;
   align-items: center;
   gap: var(--wsx-row-gap);
-  height: 28px;
+  height: 30px;
   padding: 0 4px 0 var(--wsx-row-pad);
   border-radius: var(--dsw-radius-sm);
   -webkit-user-select: none;
   user-select: none;
 }
 .wsx-workspace-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* The folder glyph is the fold control: closed while folded, open while shown. */
 .wsx-workspace-fold {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: var(--wsx-fold-w);
-  height: var(--wsx-fold-w);
+  width: var(--wsx-icon-w);
+  height: 24px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   border-radius: var(--dsw-radius-xs);
   cursor: pointer;
 }
-.wsx-workspace-fold:hover { color: var(--dsw-alias-label-primary); }
+.wsx-workspace-fold:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-workspace-fold:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .wsx-workspace-icon {
   display: inline-flex;
@@ -1660,7 +1788,6 @@ window.__ModuleLoader__.load({
   align-items: center;
   justify-content: center;
   width: var(--wsx-icon-w);
-  color: var(--dsw-alias-label-tertiary);
 }
 .wsx-workspace-title {
   flex: 1 1 auto;
@@ -1820,6 +1947,51 @@ window.__ModuleLoader__.load({
 }
 .wsx-dialog-input:focus { border-color: var(--dsw-alias-state-business-primary); }
 .wsx-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.wsx-dialog-wide { width: 400px; }
+.wsx-appearance { margin-bottom: 14px; }
+.wsx-appearance-label {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.wsx-appearance-label + .wsx-swatches { margin-bottom: 16px; }
+.wsx-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.wsx-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.wsx-swatch-fill { width: 20px; height: 20px; border-radius: 50%; background: currentColor; }
+.wsx-swatch.wsx-swatch-on { box-shadow: 0 0 0 2px var(--dsw-alias-bg-overlay), 0 0 0 3.5px currentColor; }
+.wsx-swatch:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.wsx-glyphgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.wsx-glyphcell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.wsx-glyphcell:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.wsx-glyphcell.wsx-glyphcell-on {
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.wsx-glyphcell:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .wsx-btn {
   height: 30px;
   padding: 0 12px;
@@ -1856,7 +2028,7 @@ window.__ModuleLoader__.load({
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .wsx-cat, .wsx-chevron { transition: none; }
+  .wsx-cat, .wsx-workspace-head, .wsx-workspace-fold { transition: none; }
 }
 `
 
@@ -1894,12 +2066,14 @@ window.__ModuleLoader__.load({
       'time.hours': '{n} \u5c0f\u65f6',
       'time.days': '{n} \u5929',
       'time.months': '{n} \u4e2a\u6708',
-      'color.brand': '\u9ed8\u8ba4\u84dd',
-      'color.blue': '\u5929\u84dd',
+      'color.ink': '\u58a8\u9ed1',
+      'color.red': '\u7ea2\u8272',
+      'color.orange': '\u6a59\u8272',
+      'color.amber': '\u9ec4\u8272',
       'color.green': '\u7eff\u8272',
-      'color.amber': '\u7425\u73c0',
+      'color.blue': '\u84dd\u8272',
       'color.violet': '\u7d2b\u8272',
-      'color.rose': '\u7396\u7ea2',
+      'color.pink': '\u7c89\u8272',
       'color.slate': '\u7070\u8272',
       'menu.renameCategory': '\u91cd\u547d\u540d\u5206\u7c7b',
       'menu.pinCategory': '\u7f6e\u9876\u5206\u7c7b',
@@ -1920,6 +2094,12 @@ window.__ModuleLoader__.load({
       'menu.renameWorkspace': '\u91cd\u547d\u540d\u5de5\u4f5c\u533a',
       'menu.deleteWorkspace': '\u5220\u9664\u5de5\u4f5c\u533a',
       'dialog.newCategory': '\u65b0\u5efa\u5206\u7c7b',
+      'dialog.appearance': '\u5206\u7c7b\u56fe\u6807\u4e0e\u989c\u8272',
+      'dialog.icon': '\u56fe\u6807',
+      'dialog.color': '\u989c\u8272',
+      'dialog.iconName': '\u9009\u62e9\u56fe\u6807',
+      'dialog.done': '\u5b8c\u6210',
+      'menu.appearance': '\u56fe\u6807\u4e0e\u989c\u8272',
       'dialog.renameCategory': '\u91cd\u547d\u540d\u5206\u7c7b',
       'dialog.renameWorkspace': '\u91cd\u547d\u540d\u5de5\u4f5c\u533a',
       'dialog.deleteCategory': '\u5220\u9664\u5206\u7c7b',
@@ -1961,12 +2141,14 @@ window.__ModuleLoader__.load({
       'time.hours': '{n}h',
       'time.days': '{n}d',
       'time.months': '{n}mo',
-      'color.brand': 'Default blue',
-      'color.blue': 'Sky blue',
+      'color.ink': 'Ink',
+      'color.red': 'Red',
+      'color.orange': 'Orange',
+      'color.amber': 'Yellow',
       'color.green': 'Green',
-      'color.amber': 'Amber',
+      'color.blue': 'Blue',
       'color.violet': 'Violet',
-      'color.rose': 'Rose',
+      'color.pink': 'Pink',
       'color.slate': 'Grey',
       'menu.renameCategory': 'Rename category',
       'menu.pinCategory': 'Pin category',
@@ -1987,6 +2169,12 @@ window.__ModuleLoader__.load({
       'menu.renameWorkspace': 'Rename workspace',
       'menu.deleteWorkspace': 'Delete workspace',
       'dialog.newCategory': 'New category',
+      'dialog.appearance': 'Category icon and colour',
+      'dialog.icon': 'Icon',
+      'dialog.color': 'Colour',
+      'dialog.iconName': 'Choose an icon',
+      'dialog.done': 'Done',
+      'menu.appearance': 'Icon and colour',
       'dialog.renameCategory': 'Rename category',
       'dialog.renameWorkspace': 'Rename workspace',
       'dialog.deleteCategory': 'Delete category',
@@ -2094,7 +2282,8 @@ window.__ModuleLoader__.load({
               categories: [...doc.categories, {
                 id: mintCategoryId(doc.categories),
                 name,
-                color: 'brand',
+                color: 'ink',
+                icon: DEFAULT_GLYPH,
                 pinned: false,
                 collapsed: false,
                 workspaceIds: [],
@@ -2113,6 +2302,13 @@ window.__ModuleLoader__.load({
               ...doc,
               categories: doc.categories.map(category =>
                 (category.id === categoryId ? { ...category, color } : category)),
+            }))
+          },
+          setCategoryIcon: (categoryId, icon) => {
+            update(doc => ({
+              ...doc,
+              categories: doc.categories.map(category =>
+                (category.id === categoryId ? { ...category, icon } : category)),
             }))
           },
           toggleCategoryPinned: (categoryId) => {
