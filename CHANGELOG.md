@@ -27,6 +27,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The section label still read low at 13px with a -0.5px lift, so the optical
+  nudge is now -2px. The font size stays at 13px; only the label moves.
 - The section label read bottom-heavy next to the icons at 15px; a CJK glyph's
   ink mass sits under the middle of its em box, and the larger the glyph the
   more the offset shows. The label is now 13px — close to the 16px glyphs beside

@@ -1629,7 +1629,7 @@ window.__ModuleLoader__.load({
   /* Optical corrections. A CJK glyph's ink sits low inside its em box, so the
      label carries its own upward nudge; the icon column keeps a separate hook.
      Both are sub-pixel and neither touches the row height. */
-  --wsx-header-label-nudge: -0.5px;
+  --wsx-header-label-nudge: -2px;
   --wsx-header-icon-nudge: 0px;
   display: flex;
   flex: 0 0 auto;
