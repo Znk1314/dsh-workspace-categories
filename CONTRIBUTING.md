@@ -29,6 +29,10 @@ small Host half, so the loop is short.
    users must all be able to file and re-order.
 5. **No silent writes.** A gesture that changes nothing must not rewrite the
    document, and a failed save must be surfaced.
+6. **Derive indentation from the named columns.** `.wsx-workspace` defines
+   `--wsx-icon-col` and `--wsx-title-col`, and both nesting levels use them, so a
+   session's status dot stays centred under its workspace's folder icon. Do not
+   reintroduce hand-tuned paddings.
 
 ## Running the checks
 
@@ -39,6 +43,7 @@ The harness needs a Node-compatible executable. Any of these work:
 node tools/check-keys.js client.js
 node tools/test-gestures.cjs client.js
 node tools/test-folds.cjs client.js
+node tools/test-alignment.cjs client.js
 node tools/test-regressions.cjs client.js
 node tools/test-host.mjs
 
@@ -53,10 +58,11 @@ What each covers:
 | `check-keys.js` | Every `t('…')` key exists in both dictionaries, with no unused entries. |
 | `test-gestures.cjs` | Assignment, re-ordering, pinned-group isolation, self-drop inertness, single-category membership. |
 | `test-folds.cjs` | Category and workspace folding: stored folds normalise, the toggle flips one id, and a query overrides folds. |
+| `test-alignment.cjs` | Both nesting levels share one geometry: a session's status dot centres on its workspace's folder icon, and its title starts on the workspace title. |
 | `test-regressions.cjs` | The submenu activation path, the long-press duration, and drop-seat resolution against a fake DOM. |
 | `test-host.mjs` | Route registration, GET/PUT round-trip, on-disk bytes, hostile-input repair, bad JSON, concurrent writes. |
 
-All five must pass before a pull request is ready.
+All six must pass before a pull request is ready.
 
 ## Installing a local checkout
 

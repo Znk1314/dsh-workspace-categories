@@ -1017,7 +1017,10 @@ window.__ModuleLoader__.load({
           },
           ...trigger,
         },
-        h('span', { className: statusDotClass(status, archived), 'aria-hidden': 'true' }),
+        /* The marker sits in a cell as wide as the folder column, so the dot's
+           centre lands on the folder icon's centre above it. */
+        h('span', { className: 'wsx-session-marker', 'aria-hidden': 'true' },
+          h('span', { className: statusDotClass(status, archived) })),
         h('span', { className: 'wsx-session-title' },
           summary.blank ? t('session.new') : summary.displayTitle),
         status?.pendingInteraction === undefined
@@ -1490,6 +1493,7 @@ window.__ModuleLoader__.load({
   overflow-y: auto;
   padding: 0 0 12px;
 }
+.wsx-workspace > .wsx-cat-empty { padding-left: calc(var(--wsx-title-col) + 10px); }
 .wsx-loading, .wsx-cat-empty {
   padding: 8px 10px;
   color: var(--dsw-alias-label-tertiary);
@@ -1601,7 +1605,20 @@ window.__ModuleLoader__.load({
 }
 .wsx-cat-pin { display: inline-flex; color: var(--wsx-accent); }
 .wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 2px 2px; }
-.wsx-workspace { padding: 1px 0; border-radius: var(--dsw-radius-md); }
+.wsx-workspace {
+  /* One geometry owner for both nesting levels. The workspace row puts
+     [fold][folder][title] on these columns; a session row then starts its
+     marker on the folder column and its title on the title column, so the
+     status dot sits exactly under the folder icon. */
+  --wsx-row-pad: 6px;
+  --wsx-fold-w: 14px;
+  --wsx-icon-w: 13px;
+  --wsx-row-gap: var(--dsh-sidebar-label-gap, 6px);
+  --wsx-icon-col: calc(var(--wsx-row-pad) + var(--wsx-fold-w) + var(--wsx-row-gap));
+  --wsx-title-col: calc(var(--wsx-icon-col) + var(--wsx-icon-w) + var(--wsx-row-gap));
+  padding: 1px 0;
+  border-radius: var(--dsw-radius-md);
+}
 .wsx-workspace-dragging { opacity: 0.45; }
 .wsx-drop-before { box-shadow: inset 0 2px 0 0 var(--wsx-accent); }
 .wsx-append-line {
@@ -1613,9 +1630,9 @@ window.__ModuleLoader__.load({
 .wsx-workspace-head {
   display: flex;
   align-items: center;
-  gap: var(--dsh-sidebar-label-gap, 6px);
+  gap: var(--wsx-row-gap);
   height: 28px;
-  padding: 0 4px 0 6px;
+  padding: 0 4px 0 var(--wsx-row-pad);
   border-radius: var(--dsw-radius-sm);
   -webkit-user-select: none;
   user-select: none;
@@ -1626,8 +1643,8 @@ window.__ModuleLoader__.load({
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: var(--wsx-fold-w);
+  height: var(--wsx-fold-w);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1637,7 +1654,14 @@ window.__ModuleLoader__.load({
 }
 .wsx-workspace-fold:hover { color: var(--dsw-alias-label-primary); }
 .wsx-workspace-fold:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-.wsx-workspace-icon { display: inline-flex; flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); }
+.wsx-workspace-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--wsx-icon-w);
+  color: var(--dsw-alias-label-tertiary);
+}
 .wsx-workspace-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -1660,9 +1684,9 @@ window.__ModuleLoader__.load({
 .wsx-session {
   display: flex;
   align-items: center;
-  gap: var(--dsh-sidebar-label-gap, 6px);
+  gap: var(--wsx-row-gap);
   height: 32px;
-  padding: 0 8px 0 16px;
+  padding: 0 8px 0 var(--wsx-icon-col);
   border-radius: var(--dsw-radius-md);
   cursor: pointer;
   outline: none;
@@ -1684,6 +1708,13 @@ window.__ModuleLoader__.load({
 }
 .wsx-session-flag { flex: 0 0 auto; color: var(--dsw-alias-state-warn-primary); font-size: 11px; }
 .wsx-session-time { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.wsx-session-marker {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: var(--wsx-icon-w);
+}
 .wsx-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; }
 .wsx-dot-idle { background: var(--dsw-alias-state-idle-primary); }
 .wsx-dot-ongoing { background: var(--dsw-alias-state-business-primary); }
@@ -1691,7 +1722,7 @@ window.__ModuleLoader__.load({
 .wsx-dot-done { background: var(--dsw-alias-state-success-primary); }
 .wsx-dot-archived { background: var(--dsw-alias-state-idle-primary); opacity: 0.4; }
 .wsx-more {
-  margin: 1px 0 2px 16px;
+  margin: 1px 0 2px var(--wsx-title-col);
   padding: 2px 0;
   border: 0;
   background: transparent;

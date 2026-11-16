@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Equal treatment of folding: categories could be collapsed while workspaces
   could not.
+- Session rows were indented by a hand-tuned 16 px, which put the status dot
+  well left of the folder icon above it. Both nesting levels now derive their
+  columns from shared custom properties, so a session's dot is centred on its
+  workspace's folder icon and its title starts on the workspace title.
 
 ## [1.0.0] - 2026-11-16
 
