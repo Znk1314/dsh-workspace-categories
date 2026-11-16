@@ -38,14 +38,40 @@ for (const selector of ['.wsx-cat-name', '.wsx-workspace-title', '.wsx-session-t
 // Only the glyph takes the accent as ink.
 ok('the category glyph is accented', /color:\s*var\(--wsx-accent-strong/.test(rule('.wsx-cat-glyph')))
 
-// --- 2. one rounded tinted band, no left strip -----------------------------
+// --- 2. one rounded tinted band, on the category row only ------------------
 const bar = rule('.wsx-bar')
-ok('the category is a rounded band', /border-radius:\s*var\(--dsw-radius/.test(bar))
-ok('the band is a tint of the accent', /background:\s*color-mix\(in srgb,\s*var\(--wsx-accent\)/.test(bar))
-check('there is no left accent strip pseudo-element', /\.wsx-bar::before/.test(css), false)
-ok('the band has no side border', !/border-left:/.test(bar))
+check('the block itself carries no fill', /background:/.test(bar), false)
+check('the block has no left accent strip', /\.wsx-bar::before/.test(css), false)
+const head = rule('.wsx-cat-head')
+ok('the category row is rounded', /border-radius:\s*var\(--dsw-radius/.test(head))
+ok('the category row is a tint of the accent', /background:\s*color-mix\(in srgb,\s*var\(--wsx-accent\)/.test(head))
+/* The workspaces/sessions container must stay untinted, or the fill would cover
+   the whole block instead of the category row. */
+const body = rule('.wsx-cat-body')
+check('the children container is untinted', /background:/.test(body), false)
+ok('the footer variant overrides the tint',
+  /\.wsx-bar-footer[^{]*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-1\)/.test(css))
 
-// --- 3. workspace and session titles share one left edge -------------------
+// --- 3. the picker previews the accent, not the text ink -------------------
+const swatchFill = rule('.wsx-swatch-fill')
+ok('swatches read the accent variable', /background:\s*var\(--wsx-accent\)/.test(swatchFill))
+check('swatches do not use currentColor', /currentColor/.test(swatchFill), false)
+check('the selected ring does not use currentColor', /currentColor/.test(rule('.wsx-swatch.wsx-swatch-on')), false)
+const glyphCell = rule('.wsx-glyphcell')
+ok('glyph cells preview the accent', /color:\s*var\(--wsx-accent/.test(glyphCell))
+/* The picker root must carry the draft tone so the grid resolves the variable. */
+ok('the picker root carries the draft tone', /wsx-appearance wsx-tone-\$\{draft\.color\}/.test(css))
+
+// The active tab is a tinted pill rather than plain bolder text.
+const tabOn = rule('.wsx-tab-on')
+ok('the active tab is tinted', /background:\s*color-mix\(in srgb,\s*var\(--dsw-static-blue-500\)/.test(tabOn))
+
+// The header title and its trailing controls sit on one 24px row.
+const headerActions = rule('.wsx-header-actions')
+ok('header actions declare a matching height', /height:\s*24px/.test(headerActions))
+ok('the header title declares the same line height', /line-height:\s*24px/.test(rule('.wsx-header-title')))
+
+// --- 4. workspace and session titles share one left edge -------------------
 const number = (name) => {
   const match = css.match(new RegExp('--' + name + ':\\s*([\\d.]+)px'))
   if (match === null) throw new Error('missing property --' + name)

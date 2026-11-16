@@ -12,13 +12,13 @@ dragging it where you want it.
 
 ## Features
 
-- **Rounded tinted category bands** — each category is one rounded rectangle filled with a light tint of its accent, carrying its icon, name, and count; its workspaces and sessions hang below on an indent guide.
-- **Three filters** — *All* (one flat session list), *Recent* (recently used workspaces), and *Categories* (your groupings).
+- **Rounded tinted category rows** — the category's own row is one rounded rectangle filled with a light tint of its accent, carrying its icon, name, and count; its workspaces and sessions hang below on the plain sidebar surface, joined by an indent guide.
+- **Three filters** — *All* (one flat session list), *Recent* (recently used workspaces), and *Categories* (your groupings). The selected filter is a tinted pill.
 - **Fold by icon** — click a category's icon to collapse the category, or a workspace's folder to collapse just that workspace (closed folder while folded, open folder while shown).
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
 - **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
 - **Category ordering and pinning** — drag a category header, or use Move up / Move down; pinned categories always render first.
-- **Pick an icon and a colour** — 30 line glyphs and 9 swatches per category, chosen from one picker that previews the change live. The colour tints the category band and its glyph; text stays in the theme ink.
+- **Pick an icon and a colour** — 30 line glyphs and 9 swatches per category, chosen from one picker that previews the change live. The colour tints the category row and its glyph; text stays in the theme ink.
 - **Fold either level** — collapse a whole category, or just one workspace's sessions.
 - **Nothing disappears** — workspaces with no category fall into an *Unassigned* box, and sessions with no workspace into an *Other sessions* box.
 - **Keeps built-in power features** — search (auto-expands folded boxes), archived-row filtering, a flat "one list" view, add/rename/delete workspace, and the full right-click session menu.

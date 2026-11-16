@@ -437,7 +437,9 @@ window.__ModuleLoader__.load({
        */
       const appearanceBody = () => {
         const draft = request.draft
-        return h('div', { className: 'wsx-appearance' },
+        /* The whole picker carries the draft tone, so the glyph grid previews the
+           chosen colour and the swatches can read --wsx-accent. */
+        return h('div', { className: `wsx-appearance wsx-tone-${draft.color}` },
           h('div', { className: 'wsx-appearance-label' }, t('dialog.color')),
           h('div', { className: 'wsx-swatches', role: 'radiogroup', 'aria-label': t('dialog.color') },
             COLORS.map(color => h('button', {
@@ -1609,18 +1611,22 @@ window.__ModuleLoader__.load({
   align-items: center;
   gap: 4px;
   height: 34px;
-  padding: 0 4px 0 0;
+  padding: 0 2px 0 0;
 }
 .wsx-header-title {
   flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   font-weight: 500;
+  line-height: 24px;
 }
-.wsx-header-actions { display: inline-flex; gap: 2px; align-items: center; }
+/* The trailing controls share the title's optical baseline: a fixed 24px row,
+   no extra vertical padding, so all three sit centred on it. */
+.wsx-header-actions { display: inline-flex; flex: 0 0 auto; gap: 2px; align-items: center; height: 24px; }
 .wsx-icon-btn {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1713,18 +1719,13 @@ window.__ModuleLoader__.load({
   flex: 0 0 auto;
   transition: background-color 120ms ease, opacity 120ms ease;
 }
-/* A category is one rounded rectangle filled with a light tint of its accent.
-   The tint is derived from the accent variable, so picking a colour recolours
-   the band and the glyph together and never the text. */
+/* The tint belongs to the category's own row only: its workspaces and sessions
+   hang below on the plain sidebar surface, so the block stays one breathing area
+   instead of a filled card. */
 .wsx-bar {
   position: relative;
   margin: 2px 0;
-  border-radius: var(--dsw-radius-lg);
-  background: color-mix(in srgb, var(--wsx-accent) 12%, transparent);
 }
-.wsx-bar:hover { background: color-mix(in srgb, var(--wsx-accent) 16%, transparent); }
-.wsx-bar-footer { background: var(--dsw-alias-bg-layer-1); }
-.wsx-bar-footer:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-cat-drop { box-shadow: inset 0 0 0 1.5px var(--wsx-accent); }
 .wsx-cat-dragging { opacity: 0.5; }
 /* Accent tones declare ONLY a variable. Setting the color property here would inherit into
@@ -1738,17 +1739,23 @@ window.__ModuleLoader__.load({
 .wsx-tone-violet { --wsx-accent: var(--dsw-static-violet-600); --wsx-accent-strong: var(--dsw-static-violet-600); }
 .wsx-tone-pink { --wsx-accent: #ec4899; --wsx-accent-strong: #db2777; }
 .wsx-tone-slate { --wsx-accent: var(--dsw-alias-state-idle-primary); --wsx-accent-strong: var(--dsw-alias-label-secondary); }
+/* The tinted rounded rectangle belongs to the category's own row. Its workspaces
+   and sessions sit on the plain sidebar surface below it. */
 .wsx-cat-head {
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 34px;
+  height: 36px;
   padding: 0 4px 0 10px;
-  border-radius: var(--dsw-radius-md);
+  border-radius: var(--dsw-radius-lg);
+  background: color-mix(in srgb, var(--wsx-accent) 13%, transparent);
   -webkit-user-select: none;
   user-select: none;
 }
-.wsx-cat-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-cat-head:hover { background: color-mix(in srgb, var(--wsx-accent) 19%, transparent); }
+/* The catch-all footer is not a user category: no accent tint. */
+.wsx-bar-footer .wsx-cat-head { background: var(--dsw-alias-bg-layer-1); }
+.wsx-bar-footer .wsx-cat-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-grab { cursor: grab; }
 .wsx-grab:active { cursor: grabbing; }
 /* The category glyph is the fold control: it is always visible and coloured. */
@@ -1951,11 +1958,13 @@ window.__ModuleLoader__.load({
   cursor: pointer;
 }
 .wsx-tab:hover { color: var(--dsw-alias-label-primary); }
+/* The active tab is a tinted pill, not just bolder text, so the current view is
+   unmistakable. The tint defaults to a light blue. */
 .wsx-tab-on {
-  background: var(--dsw-alias-bg-base);
+  background: color-mix(in srgb, var(--dsw-static-blue-500) 14%, transparent);
   color: var(--dsw-alias-label-primary);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  box-shadow: none;
 }
 .wsx-tab:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 /* The Recent tab lists whole workspaces. */
@@ -2069,8 +2078,18 @@ window.__ModuleLoader__.load({
   background: transparent;
   cursor: pointer;
 }
-.wsx-swatch-fill { width: 20px; height: 20px; border-radius: 50%; background: currentColor; }
-.wsx-swatch.wsx-swatch-on { box-shadow: 0 0 0 2px var(--dsw-alias-bg-overlay), 0 0 0 3.5px currentColor; }
+/* The tone classes declare a variable, not a colour, so these must read the
+   variable explicitly. currentColor here would paint every swatch in the text ink. */
+.wsx-swatch-fill {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--wsx-accent);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+}
+.wsx-swatch.wsx-swatch-on {
+  box-shadow: 0 0 0 2px var(--dsw-alias-bg-overlay), 0 0 0 3.5px var(--wsx-accent);
+}
 .wsx-swatch:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
 .wsx-glyphgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .wsx-glyphcell {
@@ -2082,14 +2101,14 @@ window.__ModuleLoader__.load({
   border: 0.5px solid transparent;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
+  /* Preview the draft accent, so the grid shows what the category will look like. */
+  color: var(--wsx-accent-strong, var(--wsx-accent));
   cursor: pointer;
 }
-.wsx-glyphcell:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.wsx-glyphcell:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-glyphcell.wsx-glyphcell-on {
-  border-color: var(--dsw-alias-state-business-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+  border-color: var(--wsx-accent);
+  background: color-mix(in srgb, var(--wsx-accent) 14%, transparent);
 }
 .wsx-glyphcell:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .wsx-btn {

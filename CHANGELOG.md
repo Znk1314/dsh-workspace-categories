@@ -27,6 +27,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The category tint covered the whole block (its workspaces and sessions),
+  not just the category row. The fill now belongs to the header row alone and
+  the children sit on the plain sidebar surface.
+- The appearance picker rendered every colour swatch black, and its icon grid
+  ignored the chosen colour: both used `currentColor`, which stopped tracking
+  the accent when the tone classes moved to a variable last round. They now
+  read `--wsx-accent`, and the dialog root carries the draft tone so the grid
+  previews it.
+- The active filter tab was only bolder text; it is now a tinted rounded pill
+  (light blue by default).
+- The section title and its three trailing buttons had different row heights;
+  they now share one 24px row.
+
 - Picking a category colour tinted its name, every workspace title, and every
   session title: the tone class set `color` on the band, which inherited. Tone
   classes now declare a custom property only, and each title pins its own ink.
