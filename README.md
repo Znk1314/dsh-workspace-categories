@@ -1,14 +1,60 @@
 # dsh-workspace-categories
 
 Group the **DeepSeek Harness** desktop sidebar's workspaces into custom
-categories. Every category is a rounded box that holds its own workspaces and
-their sessions, and you file things by pressing and holding a title and
-dragging it where you want it.
+categories. A category is a compact tinted row that holds its own workspaces and
+their sessions, and you file things by pressing and holding a title and dragging
+it where you want it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.0--rc.2-4a90d9)
 
-![Two workspace categories in the sidebar, each a rounded box holding its workspaces and sessions](docs/preview.svg)
+![The DSH sidebar with the plugin active: tinted category rows, workspaces and sessions nested under indent guides, and the All / Recent / Categories tabs](docs/preview.png)
+
+## Requirements
+
+- DeepSeek Harness **desktop** `>= 0.2.0-rc.2`. Developed and verified against
+  `0.2.2-rc.3`.
+- No build step, no network access, no extra dependencies. The plugin is plain
+  JavaScript and a manifest.
+
+## Install
+
+The plugin is a local **bundle**: DSH links the directory into the active profile
+rather than copying it.
+
+### From the Plugins page (recommended)
+
+1. Get the files. Either `git clone https://github.com/Znk1314/dsh-workspace-categories.git`
+   or use the repository's **Code → Download ZIP** and extract it.
+2. In DSH open **Settings → Plugins → Add plugin**.
+3. Select the **repository directory** — the folder that contains
+   `package.json` and `cordis.patch.yml`, not a parent folder and not a file.
+4. The entry **Workspace categories** appears in the plugin list. Make sure it is
+   enabled; the sidebar updates immediately.
+
+### Verify it loaded
+
+Open the sidebar. You should see the *Workspaces* header with **All / Recent /
+Categories** tabs under the search box, and the **＋** button beside the header
+creates your first category.
+
+If the sidebar looks unchanged, the plugin did not activate. Check
+**Settings → Plugins** that the entry is present and enabled, then reload the
+window. A plugin that throws while rendering silently falls back to the built-in
+sidebar, so an enabled-but-broken plugin looks identical to a disabled one.
+
+### Updating
+
+After replacing `client.js` (or pulling a new version), **remove and re-add** the
+plugin. A local install is a link, and DSH does not hot-swap an already loaded
+client module. Your categories live on the Host, so they survive the reinstall.
+
+### Uninstalling
+
+Remove the plugin in **Settings → Plugins**. Your data stays at
+`<DSH_HOME>/plugin-data/dsh-workspace-categories/categories.json`; delete that
+file to remove it too. No session, workspace, or message is ever deleted by this
+plugin.
 
 ## Features
 
@@ -17,32 +63,12 @@ dragging it where you want it.
 - **Fold by icon** — click a category's icon to collapse the category, or a workspace's folder to collapse just that workspace (closed folder while folded, open folder while shown).
 - **Live status** — a running session shows a spinner where its timestamp normally sits.
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
-- **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
-- **Category ordering and pinning** — drag a category header, or use Move up / Move down; pinned categories always render first.
+- **Free re-ordering** — drag with the same gesture to change a workspace's position inside a category.
+- **Category ordering and pinning** — drag a category row, or use Move up / Move down; pinned categories always render first.
 - **Pick an icon and a colour** — 30 line glyphs and 9 swatches per category, chosen from one picker that previews the change live. The colour tints the category row and its glyph; text stays in the theme ink.
-- **Fold either level** — collapse a whole category, or just one workspace's sessions.
-- **Nothing disappears** — workspaces with no category fall into an *Unassigned* box, and sessions with no workspace into an *Other sessions* box.
-- **Keeps built-in power features** — search (auto-expands folded boxes), archived-row filtering, a flat "one list" view, add/rename/delete workspace, and the full right-click session menu.
+- **Nothing disappears** — workspaces with no category fall into an *Unassigned* entry at the foot of the list, and sessions with no workspace into an *Other sessions* entry.
+- **Keeps built-in power features** — search (auto-expands folded categories), archived-row filtering, add/rename/delete workspace, and the full right-click session menu.
 - **Durable** — categories are stored on the Host, not in browser storage, so they survive restarts and port changes.
-
-## Requirements
-
-- DeepSeek Harness desktop `>= 0.2.0-rc.2`. Developed and verified against `0.2.2-rc.3`.
-
-## Install
-
-### From the Plugins page
-
-1. Download or clone this repository.
-2. In DSH open **Settings → Plugins → Add plugin** and select the repository directory.
-
-> A local install is a link, not a copy. After replacing `client.js`, remove and
-> re-add the plugin — DSH does not hot-swap an already loaded module.
-
-### From a marketplace
-
-Not published to npm yet. If you publish a fork, keep the `name` field and this
-manifest layout so `dsh plugin add` resolves it.
 
 ## Usage
 
