@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Workspace folding: the triangle at the left of a workspace row (or
+  *Collapse workspace* in its menu) hides just that workspace's sessions,
+  remembered per workspace. A search re-opens folded workspaces and categories
+  so a match is never hidden.
+
+### Fixed
+
+- Equal treatment of folding: categories could be collapsed while workspaces
+  could not.
+
 ## [1.0.0] - 2026-11-16
 
 ### Added

@@ -16,7 +16,8 @@ dragging it where you want it.
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
 - **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
 - **Category ordering and pinning** — drag a category header, or use Move up / Move down; pinned categories always render first.
-- **Seven accent colours**, rename, collapse/expand, and delete with confirmation.
+- **Seven accent colours**, rename, and delete with confirmation.
+- **Fold either level** — collapse a whole category, or just one workspace's sessions.
 - **Nothing disappears** — workspaces with no category fall into an *Unassigned* box, and sessions with no workspace into an *Other sessions* box.
 - **Keeps built-in power features** — search (auto-expands folded boxes), archived-row filtering, a flat "one list" view, add/rename/delete workspace, and the full right-click session menu.
 - **Durable** — categories are stored on the Host, not in browser storage, so they survive restarts and port changes.
@@ -50,7 +51,8 @@ manifest layout so `dsh plugin add` resolves it.
 | Re-order categories | press and hold a category header, or its **⋯** menu → *Move up* / *Move down* |
 | Pin a category | category **⋯** menu → *Pin category* (pinned boxes stay on top) |
 | Change colour | category **⋯** menu → one of seven accents |
-| Collapse / expand | the triangle at the left of a category header |
+| Collapse / expand a category | the triangle at the left of a category header |
+| Collapse / expand one workspace | the triangle at the left of its row, or its **⋯** menu → *Collapse workspace* |
 | Remove a workspace from a category | drag it into *Unassigned*, or its **⋯** menu → *Remove from category* |
 | Delete a category | category **⋯** menu → *Delete category* (its workspaces return to *Unassigned*; no session is deleted) |
 | Search / filter / flat view | the search box and the sliders button at the right |
@@ -92,13 +94,14 @@ notice clears once a write succeeds.
       "pinned": true, "collapsed": false, "workspaceIds": ["w1", "w2"] }
   ],
   "view": { "mode": "categories", "archived": "default" },
-  "unassignedCollapsed": false
+  "unassignedCollapsed": false,
+  "collapsedWorkspaces": ["w3"]
 }
 ```
 
 `color` accepts `brand | blue | green | amber | violet | rose | slate`;
 `view.mode` accepts `categories | flat`; `view.archived` accepts
-`default | show | only`. The Host repairs malformed or hostile input, so a
+`default | show | only`; `collapsedWorkspaces` lists folded workspace ids. The Host repairs malformed or hostile input, so a
 damaged file never takes the sidebar down.
 
 ## How it works

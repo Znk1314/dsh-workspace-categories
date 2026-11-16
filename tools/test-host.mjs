@@ -50,7 +50,8 @@ check('route body mode', route.requestBody, 'buffered')
 const empty = await route.fetch(new Request('http://localhost/api/workspace-categories.doc'))
 check('first GET status', empty.status, 200)
 const emptyDoc = await empty.json()
-check('first GET shape', Object.keys(emptyDoc).sort(), ['categories', 'unassignedCollapsed', 'version', 'view'])
+check('first GET shape', Object.keys(emptyDoc).sort(), ['categories', 'collapsedWorkspaces', 'unassignedCollapsed', 'version', 'view'])
+check('first GET has no collapsed workspaces', emptyDoc.collapsedWorkspaces, [])
 
 // A PUT stores the document, and a later GET reads it back.
 const payload = {
@@ -61,6 +62,7 @@ const payload = {
   ],
   view: { mode: 'categories', archived: 'show' },
   unassignedCollapsed: true,
+  collapsedWorkspaces: ['w2', 'w3'],
 }
 const put = await route.fetch(new Request('http://localhost/api/workspace-categories.doc', {
   method: 'PUT',
@@ -75,6 +77,7 @@ check('PUT keeps view', stored.view, { mode: 'categories', archived: 'show' })
 
 const reread = await (await route.fetch(new Request('http://localhost/api/workspace-categories.doc'))).json()
 check('GET after PUT round-trips', reread.categories[0].workspaceIds, ['w2', 'w1'])
+check('collapsed workspaces survive the round-trip', reread.collapsedWorkspaces, ['w2', 'w3'])
 
 // The bytes on disk are the durable record, not just the in-memory cache.
 const onDisk = JSON.parse(await readFile(join(home, 'plugin-data', 'dsh-workspace-categories', 'categories.json'), 'utf8'))
@@ -100,6 +103,13 @@ check('duplicate ids collapsed', repaired.categories.map(c => c.id), ['dup'])
 check('unknown colour normalised', repaired.categories[0].color, 'brand')
 check('member list cleaned', repaired.categories[0].workspaceIds, ['w1'])
 check('unknown enums normalised', repaired.view, { mode: 'categories', archived: 'default' })
+check('missing collapsed list defaults to empty', repaired.collapsedWorkspaces, [])
+const hostileFold = await route.fetch(new Request('http://localhost/api/workspace-categories.doc', {
+  method: 'PUT',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ collapsedWorkspaces: ['ok', 'ok', 7, '', null, 'fine'] }),
+}))
+check('collapsed list cleaned of dupes and non-strings', (await hostileFold.json()).collapsedWorkspaces, ['ok', 'fine'])
 
 // A malformed body must surface as a 500, not a silent success.
 const broken = await route.fetch(new Request('http://localhost/api/workspace-categories.doc', {

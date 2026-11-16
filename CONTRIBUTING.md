@@ -38,6 +38,7 @@ The harness needs a Node-compatible executable. Any of these work:
 # a normal Node install
 node tools/check-keys.js client.js
 node tools/test-gestures.cjs client.js
+node tools/test-folds.cjs client.js
 node tools/test-regressions.cjs client.js
 node tools/test-host.mjs
 
@@ -51,10 +52,11 @@ What each covers:
 |---|---|
 | `check-keys.js` | Every `t('…')` key exists in both dictionaries, with no unused entries. |
 | `test-gestures.cjs` | Assignment, re-ordering, pinned-group isolation, self-drop inertness, single-category membership. |
+| `test-folds.cjs` | Category and workspace folding: stored folds normalise, the toggle flips one id, and a query overrides folds. |
 | `test-regressions.cjs` | The submenu activation path, the long-press duration, and drop-seat resolution against a fake DOM. |
 | `test-host.mjs` | Route registration, GET/PUT round-trip, on-disk bytes, hostile-input repair, bad JSON, concurrent writes. |
 
-All four must pass before a pull request is ready.
+All five must pass before a pull request is ready.
 
 ## Installing a local checkout
 

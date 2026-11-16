@@ -58,6 +58,7 @@ window.__ModuleLoader__.load({
       categories: [],
       view: { mode: 'categories', archived: 'default' },
       unassignedCollapsed: false,
+      collapsedWorkspaces: [],
     })
 
     /* ------------------------------------------------------------------ */
@@ -148,6 +149,9 @@ window.__ModuleLoader__.load({
           archived: view.archived === 'show' || view.archived === 'only' ? view.archived : 'default',
         },
         unassignedCollapsed: source.unassignedCollapsed === true,
+        collapsedWorkspaces: (Array.isArray(source.collapsedWorkspaces) ? source.collapsedWorkspaces : [])
+          .filter(id => typeof id === 'string' && id !== '')
+          .filter((id, index, all) => all.indexOf(id) === index),
       }
     }
 
@@ -909,6 +913,14 @@ window.__ModuleLoader__.load({
         }
         items.push(
           {
+            id: 'fold',
+            label: doc.collapsedWorkspaces.includes(workspace.workspaceId)
+              ? t('menu.expandWorkspace')
+              : t('menu.collapseWorkspace'),
+            run: () => { actions.toggleWorkspaceCollapsed(workspace.workspaceId) },
+          },
+          { id: 'sep-fold', separator: true },
+          {
             id: 'rename',
             label: t('menu.renameWorkspace'),
             run: () => askName(t('dialog.renameWorkspace'), workspaceTitle(workspace), (name) => {
@@ -1027,6 +1039,9 @@ window.__ModuleLoader__.load({
         const limit = searching ? rows.length : (limits[limitKey] ?? BOX_LIMIT)
         const visible = rows.slice(0, limit)
         const hidden = rows.length - visible.length
+        /* A fold hides this workspace's sessions; a query re-opens it so a match
+           is never hidden behind a fold the user forgot about. */
+        const folded = doc.collapsedWorkspaces.includes(key) && !searching
         const dragging = drag !== null && drag.kind === 'workspace'
           && drag.workspaceId === key
         const hint = dropHint !== null && dropHint.categoryId === categoryId
@@ -1054,6 +1069,18 @@ window.__ModuleLoader__.load({
             ? undefined
             : event => openMenuAt(event, workspaceMenuItems(workspace)),
         },
+        h('button', {
+          type: 'button',
+          className: 'wsx-workspace-fold',
+          'aria-expanded': !folded,
+          'aria-label': folded ? t('menu.expandWorkspace') : t('menu.collapseWorkspace'),
+          title: folded ? t('menu.expandWorkspace') : t('menu.collapseWorkspace'),
+          onClick: (event) => {
+            event.stopPropagation()
+            actions.toggleWorkspaceCollapsed(key)
+          },
+        }, h('span', { className: folded ? 'wsx-chevron' : 'wsx-chevron wsx-chevron-open' },
+          ICON.chevron(11))),
         h('span', { className: 'wsx-workspace-icon', 'aria-hidden': 'true' }, ICON.folder(13)),
         h('span', { className: 'wsx-workspace-title' },
           workspace === undefined ? t('section.otherSessions') : workspaceTitle(workspace)),
@@ -1076,17 +1103,23 @@ window.__ModuleLoader__.load({
             title: t('menu.workspaceActions'),
             onClick: event => openMenuAt(event, workspaceMenuItems(workspace)),
           }, ICON.dots(13)))),
-        visible.length === 0
-          ? h('div', { className: 'wsx-cat-empty' },
-            searching ? t('box.noMatches') : t('box.noSessions'))
-          : h('div', { className: 'wsx-sessions', role: 'group' }, visible.map(row => renderSession(row))),
-        hidden > 0
-          ? h('button', {
-            type: 'button',
-            className: 'wsx-more',
-            onClick: () => setLimits(current => ({ ...current, [limitKey]: limit + BOX_LIMIT })),
-          }, t('box.showMore', { n: hidden }))
-          : null)
+        folded
+          ? null
+          : [
+            visible.length === 0
+              ? h('div', { key: 'empty', className: 'wsx-cat-empty' },
+                searching ? t('box.noMatches') : t('box.noSessions'))
+              : h('div', { key: 'rows', className: 'wsx-sessions', role: 'group' },
+                visible.map(row => renderSession(row))),
+            hidden > 0
+              ? h('button', {
+                key: 'more',
+                type: 'button',
+                className: 'wsx-more',
+                onClick: () => setLimits(current => ({ ...current, [limitKey]: limit + BOX_LIMIT })),
+              }, t('box.showMore', { n: hidden }))
+              : null,
+          ])
       }
 
       const draggingCategoryId = drag !== null && drag.kind === 'category' ? drag.categoryId : null
@@ -1588,6 +1621,22 @@ window.__ModuleLoader__.load({
   user-select: none;
 }
 .wsx-workspace-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-workspace-fold {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  border-radius: var(--dsw-radius-xs);
+  cursor: pointer;
+}
+.wsx-workspace-fold:hover { color: var(--dsw-alias-label-primary); }
+.wsx-workspace-fold:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .wsx-workspace-icon { display: inline-flex; flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); }
 .wsx-workspace-title {
   flex: 1 1 auto;
@@ -1825,6 +1874,8 @@ window.__ModuleLoader__.load({
       'menu.pinCategory': '\u7f6e\u9876\u5206\u7c7b',
       'menu.unpinCategory': '\u53d6\u6d88\u7f6e\u9876',
       'menu.collapseCategory': '\u6536\u8d77\u5206\u7c7b',
+      'menu.collapseWorkspace': '\u6536\u8d77\u5de5\u4f5c\u533a',
+      'menu.expandWorkspace': '\u5c55\u5f00\u5de5\u4f5c\u533a',
       'menu.expandCategory': '\u5c55\u5f00\u5206\u7c7b',
       'menu.deleteCategory': '\u5220\u9664\u5206\u7c7b',
       'menu.moveUp': '\u4e0a\u79fb\u5206\u7c7b',
@@ -1890,6 +1941,8 @@ window.__ModuleLoader__.load({
       'menu.pinCategory': 'Pin category',
       'menu.unpinCategory': 'Unpin category',
       'menu.collapseCategory': 'Collapse category',
+      'menu.collapseWorkspace': 'Collapse workspace',
+      'menu.expandWorkspace': 'Expand workspace',
       'menu.expandCategory': 'Expand category',
       'menu.deleteCategory': 'Delete category',
       'menu.moveUp': 'Move category up',
@@ -2047,6 +2100,14 @@ window.__ModuleLoader__.load({
           },
           toggleUnassignedCollapsed: () => {
             update(doc => ({ ...doc, unassignedCollapsed: !doc.unassignedCollapsed }))
+          },
+          toggleWorkspaceCollapsed: (workspaceId) => {
+            update(doc => ({
+              ...doc,
+              collapsedWorkspaces: doc.collapsedWorkspaces.includes(workspaceId)
+                ? doc.collapsedWorkspaces.filter(id => id !== workspaceId)
+                : [...doc.collapsedWorkspaces, workspaceId],
+            }))
           },
           deleteCategory: (categoryId) => {
             update(doc => ({

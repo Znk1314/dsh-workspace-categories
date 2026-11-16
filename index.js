@@ -28,6 +28,7 @@ const EMPTY_DOC = {
   categories: [],
   view: { mode: 'categories', archived: 'default' },
   unassignedCollapsed: false,
+  collapsedWorkspaces: [],
 }
 
 /**
@@ -81,6 +82,9 @@ function normalizeDoc(value) {
       archived: view.archived === 'show' || view.archived === 'only' ? view.archived : 'default',
     },
     unassignedCollapsed: doc.unassignedCollapsed === true,
+    collapsedWorkspaces: (Array.isArray(doc.collapsedWorkspaces) ? doc.collapsedWorkspaces : [])
+      .filter(workspaceId => typeof workspaceId === 'string' && workspaceId !== '')
+      .filter((workspaceId, index, all) => all.indexOf(workspaceId) === index),
   }
 }
 
