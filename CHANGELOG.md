@@ -27,6 +27,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The section label read bottom-heavy next to the icons at 15px; a CJK glyph's
+  ink mass sits under the middle of its em box, and the larger the glyph the
+  more the offset shows. The label is now 13px — close to the 16px glyphs beside
+  it — and its optical lift is `-0.5px` rather than `-1px`, since a smaller
+  glyph has a smaller offset.
 - The section label still sat a hair below the icon centres after the header
   was geometrically centred. A CJK glyph's ink mass sits under the middle of its
   em box, so the label now carries its own `--wsx-header-label-nudge`

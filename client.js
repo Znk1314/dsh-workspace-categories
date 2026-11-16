@@ -1629,7 +1629,7 @@ window.__ModuleLoader__.load({
   /* Optical corrections. A CJK glyph's ink sits low inside its em box, so the
      label carries its own upward nudge; the icon column keeps a separate hook.
      Both are sub-pixel and neither touches the row height. */
-  --wsx-header-label-nudge: -1px;
+  --wsx-header-label-nudge: -0.5px;
   --wsx-header-icon-nudge: 0px;
   display: flex;
   flex: 0 0 auto;
@@ -1647,7 +1647,9 @@ window.__ModuleLoader__.load({
   height: var(--wsx-header-box);
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
-  font-size: 15px;
+  /* Sized to read at the same weight as the 16px glyphs beside it: a larger
+     label made the row look bottom-heavy no matter how it was nudged. */
+  font-size: 13px;
   font-weight: 500;
 }
 .wsx-header-label {
@@ -1657,8 +1659,8 @@ window.__ModuleLoader__.load({
   white-space: nowrap;
   /* 1.2 keeps the CJK glyphs clear of the box edges while staying centred. */
   line-height: 1.2;
-  /* Visual-centre correction: the glyph's ink mass sits below the em box's
-     middle, so lift the text to meet the icons' centres. */
+  /* Visual-centre correction: a CJK glyph's ink mass sits below the middle of
+     its em box, so lift the text to meet the icons' centres. */
   transform: translateY(var(--wsx-header-label-nudge));
 }
 /* The controls group is one flex row of fixed 24px boxes with one uniform gap. */

@@ -77,7 +77,7 @@ ok('a nudge variable exists for optical correction', /--wsx-header-icon-nudge:/.
 /* A CJK glyph's ink sits below the em box's centre, so the label needs its own
    sub-pixel lift; the two hooks stay independent. */
 ok('a label nudge variable exists', /--wsx-header-label-nudge:/.test(header))
-ok('the label nudge is negative (lifts the text)', /--wsx-header-label-nudge:\s*-\d/.test(header))
+ok('the label nudge is negative (lifts the text)', /--wsx-header-label-nudge:\s*-[\d.]+px/.test(header))
 const headerTitle = rule('.wsx-header-title')
 ok('the label box is the shared box height', /height:\s*var\(--wsx-header-box\)/.test(headerTitle))
 /* The label must claim the free space, or the icon group sits beside the text
