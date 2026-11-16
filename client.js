@@ -45,8 +45,6 @@ window.__ModuleLoader__.load({
     const BOX_LIMIT = 6
     /** Workspaces listed in the Recent tab. */
     const RECENT_LIMIT = 8
-    /** Workspaces in the Recent strip above the tabs. */
-    const RECENT_STRIP_LIMIT = 4
     /** Debounce for writing the document to the Host. */
     const SAVE_DEBOUNCE_MS = 240
     /** Virtual category ids for the two buckets that have no stored category. */
@@ -1468,24 +1466,6 @@ window.__ModuleLoader__.load({
       const loadFailed = workspaceState.state === 'error'
       const notReady = workspaceState.phase !== 'ready'
 
-      /**
-       * The Recent strip above the tabs: a few frequent workspaces one click
-       * away, so a busy project never needs its category expanded first.
-       * @returns the strip, or null when there is nothing to show.
-       */
-      const renderRecentStrip = () => {
-        if (recentWorkspaces.length === 0 || searching) return null
-        return h('div', { className: 'wsx-recent-strip' },
-          h('div', { className: 'wsx-strip-title' }, t('section.recent')),
-          recentWorkspaces.slice(0, RECENT_STRIP_LIMIT).map(workspace => h('button', {
-            key: workspace.workspaceId,
-            type: 'button',
-            className: 'wsx-chip',
-            title: workspaceTitle(workspace),
-            onClick: () => { actions.openWorkspace(workspace.workspaceId) },
-          }, h('span', { className: 'wsx-chip-label' }, workspaceTitle(workspace)))))
-      }
-
       const tabStrip = h('div', { className: 'wsx-tabs', role: 'tablist', 'aria-label': t('section.workspaces') },
         tabs.map(([value, label]) => h('button', {
           key: value,
@@ -1580,7 +1560,6 @@ window.__ModuleLoader__.load({
           ? null
           : h('div', { className: 'wsx-notice', role: 'status' }, t('section.saveFailed')),
         error === null ? null : h('div', { className: 'wsx-error', role: 'alert' }, error),
-        renderRecentStrip(),
         tabStrip,
         h('div', {
           className: 'wsx-body',
@@ -1734,36 +1713,31 @@ window.__ModuleLoader__.load({
   flex: 0 0 auto;
   transition: background-color 120ms ease, opacity 120ms ease;
 }
-/* A category is a compact coloured bar, not a box: the accent strip on its left
-   carries the colour, so the list stays dense. */
+/* A category is one rounded rectangle filled with a light tint of its accent.
+   The tint is derived from the accent variable, so picking a colour recolours
+   the band and the glyph together and never the text. */
 .wsx-bar {
   position: relative;
-  margin: 1px 0;
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
+  margin: 2px 0;
+  border-radius: var(--dsw-radius-lg);
+  background: color-mix(in srgb, var(--wsx-accent) 12%, transparent);
 }
-.wsx-bar::before {
-  content: '';
-  position: absolute;
-  inset: 4px auto 4px 0;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--wsx-accent);
-}
-.wsx-bar-footer { background: transparent; }
-.wsx-bar-footer::before { background: var(--dsw-alias-border-l2); }
+.wsx-bar:hover { background: color-mix(in srgb, var(--wsx-accent) 16%, transparent); }
+.wsx-bar-footer { background: var(--dsw-alias-bg-layer-1); }
+.wsx-bar-footer:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-cat-drop { box-shadow: inset 0 0 0 1.5px var(--wsx-accent); }
 .wsx-cat-dragging { opacity: 0.5; }
-/* Accent tones: one class tints the category's glyph, its strip, and drop markers. */
-.wsx-tone-ink { color: var(--dsw-alias-label-primary); --wsx-accent: var(--dsw-alias-label-primary); }
-.wsx-tone-red { color: var(--dsw-static-red-500); --wsx-accent: var(--dsw-static-red-500); }
-.wsx-tone-orange { color: #f97316; --wsx-accent: #f97316; }
-.wsx-tone-amber { color: var(--dsw-static-amber-500); --wsx-accent: var(--dsw-static-amber-500); }
-.wsx-tone-green { color: var(--dsw-static-green-500); --wsx-accent: var(--dsw-static-green-500); }
-.wsx-tone-blue { color: var(--dsw-static-blue-500); --wsx-accent: var(--dsw-static-blue-500); }
-.wsx-tone-violet { color: var(--dsw-static-violet-600); --wsx-accent: var(--dsw-static-violet-600); }
-.wsx-tone-pink { color: #ec4899; --wsx-accent: #ec4899; }
-.wsx-tone-slate { color: var(--dsw-alias-label-tertiary); --wsx-accent: var(--dsw-alias-state-idle-primary); }
+/* Accent tones declare ONLY a variable. Setting the color property here would inherit into
+   the category name, every workspace title, and every session title. */
+.wsx-tone-ink { --wsx-accent: var(--dsw-alias-label-primary); --wsx-accent-strong: var(--dsw-alias-label-primary); }
+.wsx-tone-red { --wsx-accent: var(--dsw-static-red-500); --wsx-accent-strong: var(--dsw-static-red-600); }
+.wsx-tone-orange { --wsx-accent: #f97316; --wsx-accent-strong: #ea580c; }
+.wsx-tone-amber { --wsx-accent: var(--dsw-static-amber-500); --wsx-accent-strong: var(--dsw-static-amber-600); }
+.wsx-tone-green { --wsx-accent: var(--dsw-static-green-500); --wsx-accent-strong: #16a34a; }
+.wsx-tone-blue { --wsx-accent: var(--dsw-static-blue-500); --wsx-accent-strong: var(--dsw-static-blue-600); }
+.wsx-tone-violet { --wsx-accent: var(--dsw-static-violet-600); --wsx-accent-strong: var(--dsw-static-violet-600); }
+.wsx-tone-pink { --wsx-accent: #ec4899; --wsx-accent-strong: #db2777; }
+.wsx-tone-slate { --wsx-accent: var(--dsw-alias-state-idle-primary); --wsx-accent-strong: var(--dsw-alias-label-secondary); }
 .wsx-cat-head {
   display: flex;
   align-items: center;
@@ -1793,13 +1767,20 @@ window.__ModuleLoader__.load({
 }
 .wsx-cat-fold:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-cat-fold:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-.wsx-cat-glyph { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
+.wsx-cat-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* The only element that takes the accent as ink. */
+  color: var(--wsx-accent-strong, var(--wsx-accent));
+}
 .wsx-cat-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Explicit primary ink, so a tone can never tint the title. */
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   font-weight: 600;
@@ -1818,15 +1799,15 @@ window.__ModuleLoader__.load({
 .wsx-cat-pin { display: inline-flex; color: var(--wsx-accent); }
 .wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 1px 0 4px; }
 .wsx-workspace {
-  /* One geometry owner for all three nesting levels. A category bar starts its
-     glyph here, a workspace row puts [folder][title] on these columns, and a
-     session row starts its title on the title column — so the workspace title
-     and its session titles share one left edge. */
-  --wsx-row-pad: 16px;
+  /* Single geometry owner. A workspace row is [pad][folder 16][gap][title]; its
+     sessions sit inside the guide and start their title on the SAME column, so
+     workspace titles and session titles share one left edge. */
+  --wsx-guide-x: 18px;
+  --wsx-ws-pad: 26px;
   --wsx-icon-w: 16px;
   --wsx-row-gap: 8px;
-  --wsx-icon-col: calc(var(--wsx-row-pad) + 6px);
-  --wsx-title-col: calc(var(--wsx-icon-col) + var(--wsx-icon-w) + var(--wsx-row-gap));
+  --wsx-icon-col: var(--wsx-ws-pad);
+  --wsx-title-col: calc(var(--wsx-ws-pad) + var(--wsx-icon-w) + var(--wsx-row-gap));
   padding: 0;
   border-radius: var(--dsw-radius-md);
 }
@@ -1838,24 +1819,26 @@ window.__ModuleLoader__.load({
   border-radius: 1px;
   background: var(--wsx-accent);
 }
-/* The indent guide is the visible thread from a category to its sessions. */
+/* The indent guide is the visible thread from a workspace to its sessions. Its
+   border lands on the guide column and its padding carries the text to the
+   title column, so a session title lines up under the workspace title. */
 .wsx-guide {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  margin-left: var(--wsx-icon-col);
-  padding-left: calc(var(--wsx-icon-w) + var(--wsx-row-gap) - 1px);
-  border-left: 1px solid var(--dsw-alias-border-l2);
-  /* Pull the guide back up under the workspace row it belongs to. */
-  margin-top: -1px;
+  margin-left: var(--wsx-guide-x);
+  border-left: 1.5px solid var(--dsw-alias-border-l2);
+  padding-left: calc(var(--wsx-title-col) - var(--wsx-guide-x) - 1.5px);
+  margin-top: -2px;
+  padding-bottom: 2px;
 }
-.wsx-guide-flat { margin-left: 8px; padding-left: 8px; }
+.wsx-guide-flat { margin-left: 8px; padding-left: 8px; border-left-color: transparent; }
 .wsx-workspace-head {
   display: flex;
   align-items: center;
   gap: var(--wsx-row-gap);
   height: 30px;
-  padding: 0 4px 0 var(--wsx-row-pad);
+  padding: 0 4px 0 var(--wsx-ws-pad);
   border-radius: var(--dsw-radius-sm);
   -webkit-user-select: none;
   user-select: none;
@@ -1975,27 +1958,7 @@ window.__ModuleLoader__.load({
   box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
 }
 .wsx-tab:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-/* The recent strip keeps a few frequent workspaces one click away. */
-.wsx-recent-strip { display: flex; flex-wrap: wrap; flex: 0 0 auto; gap: 4px; margin: 0 0 6px; }
-.wsx-strip-title {
-  flex: 0 0 100%;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-}
-.wsx-chip {
-  max-width: 100%;
-  height: 24px;
-  padding: 0 10px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.wsx-chip:hover { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l2); }
-.wsx-chip-label { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The Recent tab lists whole workspaces. */
 .wsx-recent { display: flex; flex-direction: column; gap: 4px; }
 .wsx-rail { align-items: center; gap: 2px; padding-top: 6px; }
 .wsx-rail-btn {
@@ -2177,7 +2140,6 @@ window.__ModuleLoader__.load({
       'section.workspaces': '\u5de5\u4f5c\u533a',
       'section.unassigned': '\u672a\u5206\u7c7b',
       'section.otherSessions': '\u5176\u4ed6\u4f1a\u8bdd',
-      'section.recent': '\u6700\u8fd1\u4f7f\u7528',
       'section.noRecent': '\u8fd8\u6ca1\u6709\u6700\u8fd1\u4f7f\u7528\u7684\u5de5\u4f5c\u533a\u3002',
       'tab.all': '\u5168\u90e8',
       'tab.recent': '\u6700\u8fd1',
@@ -2255,7 +2217,6 @@ window.__ModuleLoader__.load({
       'section.workspaces': 'Workspaces',
       'section.unassigned': 'Unassigned',
       'section.otherSessions': 'Other sessions',
-      'section.recent': 'Recently used',
       'section.noRecent': 'No recently used workspaces yet.',
       'tab.all': 'All',
       'tab.recent': 'Recent',
@@ -2489,15 +2450,6 @@ window.__ModuleLoader__.load({
             update(doc => ({ ...doc, view: { ...doc.view, ...patch } }))
           },
           openSession: (sessionId) => { uiWorkspace?.openSession(sessionId) },
-          /** Open a workspace by resuming its newest session, as the shipped browser does. */
-          openWorkspace: (workspaceId) => {
-            const workspace = workspaces === undefined
-              ? undefined
-              : workspaces.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
-            const newest = workspace === undefined ? undefined : workspace.sessionIds[0]
-            if (newest !== undefined) uiWorkspace?.openSession(newest)
-            else uiWorkspace?.startSession(workspaceId)
-          },
           startSession: (workspaceId) => { uiWorkspace?.startSession(workspaceId) },
           notifyArchived: () => {
             contextMenus?.notify('That session is archived. Unarchive it from its menu to open it.')

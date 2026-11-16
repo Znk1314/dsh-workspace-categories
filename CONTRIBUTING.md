@@ -48,7 +48,7 @@ node tools/test-gestures.cjs client.js
 node tools/test-folds.cjs client.js
 node tools/test-icons.cjs client.js index.js
 node tools/test-render.cjs client.js index.js
-node tools/test-alignment.cjs client.js
+node tools/test-layout.cjs client.js
 node tools/test-regressions.cjs client.js
 node tools/test-host.mjs
 
@@ -65,7 +65,7 @@ What each covers:
 | `test-folds.cjs` | Category and workspace folding: stored folds normalise, the toggle flips one id, and a query overrides folds. |
 | `test-render.cjs` | Renders every tab, the empty and error states, and the rail layout with realistic data. A single undefined binding crashes the render, which makes the slot entry abdicate and silently falls back to the shipped browser. |
 | `test-icons.cjs` | Glyph well-formedness, browser/Host vocabulary parity, palette parity, and that the folder icon is the fold control. |
-| `test-alignment.cjs` | Both nesting levels share one geometry: a session's status dot centres on its workspace's folder icon, and its title starts on the workspace title. |
+| `test-layout.cjs` | Tone classes carry a variable only (never `color`, which would tint titles), the category is one rounded tinted band, and workspace and session titles share one left edge. |
 | `test-regressions.cjs` | The submenu activation path, the long-press duration, and drop-seat resolution against a fake DOM. |
 | `test-host.mjs` | Route registration, GET/PUT round-trip, on-disk bytes, hostile-input repair, bad JSON, concurrent writes. |
 

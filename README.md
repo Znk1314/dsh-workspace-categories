@@ -12,13 +12,13 @@ dragging it where you want it.
 
 ## Features
 
-- **Compact coloured category bars** — each category is a thin accented bar with its own icon, name, and count; its workspaces and sessions hang below on an indent guide.
-- **Three filters** — *All* (one flat session list), *Recent* (recently used workspaces), and *Categories* (your groupings), with a *Recently used* strip of frequent workspaces above them.
+- **Rounded tinted category bands** — each category is one rounded rectangle filled with a light tint of its accent, carrying its icon, name, and count; its workspaces and sessions hang below on an indent guide.
+- **Three filters** — *All* (one flat session list), *Recent* (recently used workspaces), and *Categories* (your groupings).
 - **Fold by icon** — click a category's icon to collapse the category, or a workspace's folder to collapse just that workspace (closed folder while folded, open folder while shown).
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
 - **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
 - **Category ordering and pinning** — drag a category header, or use Move up / Move down; pinned categories always render first.
-- **Pick an icon and a colour** — 30 line glyphs and 9 swatches per category, chosen from one picker that previews the change live.
+- **Pick an icon and a colour** — 30 line glyphs and 9 swatches per category, chosen from one picker that previews the change live. The colour tints the category band and its glyph; text stays in the theme ink.
 - **Fold either level** — collapse a whole category, or just one workspace's sessions.
 - **Nothing disappears** — workspaces with no category fall into an *Unassigned* box, and sessions with no workspace into an *Other sessions* box.
 - **Keeps built-in power features** — search (auto-expands folded boxes), archived-row filtering, a flat "one list" view, add/rename/delete workspace, and the full right-click session menu.
@@ -58,7 +58,6 @@ manifest layout so `dsh plugin add` resolves it.
 | Remove a workspace from a category | drag it into *Unassigned*, or its **⋯** menu → *Remove from category* |
 | Delete a category | category **⋯** menu → *Delete category* (its workspaces return to *Unassigned*; no session is deleted) |
 | Switch view | the **All / Recent / Categories** tabs under the search box |
-| Jump to a frequent workspace | click a chip in the *Recently used* strip |
 | Archived filter | the sliders button at the right |
 
 Every drag-only action also has a menu path, so a keyboard or touch user can do

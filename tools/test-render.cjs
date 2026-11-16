@@ -193,9 +193,8 @@ for (const tab of tabs) {
   if (tab === 'all') {
     ok('all tab draws one flat list', rows > 0)
   }
-  if (tab !== 'all') {
-    ok('recent strip renders chips (' + chips + ')', chips >= 1)
-  }
+  /* The recent chip strip was removed on request; the Recent TAB remains. */
+  ok('no chip strip is rendered', chips === 0)
   console.log(tab + ': bars=' + bars + ' rows=' + rows + ' guides=' + guides + ' chips=' + chips)
 }
 
