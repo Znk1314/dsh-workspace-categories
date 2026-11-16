@@ -1308,8 +1308,10 @@ window.__ModuleLoader__.load({
         const { summary, archived } = row
         const status = statuses.get(summary.id)
         /* A running session replaces its timestamp with a spinner, so live work is
-           visible without a separate status column. */
-        const running = !archived && status?.running === true
+           visible without a separate status column. The status map has no entry
+           until a baseline or event establishes one, so fall back to the summary's
+           own `running` flag the way the shipped tree does. */
+        const running = !archived && (status?.running ?? summary.running) === true
         const classes = ['wsx-session']
         if (summary.id === currentSessionId) classes.push('wsx-session-selected')
         if (archived) classes.push('wsx-session-archived')
@@ -1633,12 +1635,10 @@ window.__ModuleLoader__.load({
   height: var(--wsx-header-h);
   padding: 0 2px 0 0;
 }
-/* The label sits in a fixed box the same height as an icon button. The inner
-   span carries the line box, so the text centres on its own em box rather than
-   on the header's baseline grid. */
+/* The label takes the free space so the controls are pushed to the right edge. */
 .wsx-header-title {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   align-items: center;
   min-width: 0;
   height: var(--wsx-header-box);

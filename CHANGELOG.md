@@ -27,6 +27,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The three header controls sat immediately after the label instead of on the
+  sidebar's right edge: the label was declared `flex: 0 1 auto`, so it shrank to
+  its text width and left the free space unclaimed. It now grows
+  (`flex: 1 1 auto`), pushing the controls to the right edge.
+- The running-session spinner never appeared. The row read only
+  `statuses.get(id)?.running`, but the status map carries no entry until a
+  baseline or event establishes one. It now falls back to the summary's own
+  `running` flag, matching how the shipped tree resolves it
+  (`status?.running ?? summary.running`).
 - The section header aligned its label and three trailing icons by relying on a
   shared `line-height`, which left the text sitting slightly off the icons'
   optical centre. The label and every icon now occupy the same fixed 24px box,

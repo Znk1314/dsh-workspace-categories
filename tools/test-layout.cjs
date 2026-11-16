@@ -77,6 +77,9 @@ ok('a nudge variable exists for optical correction', /--wsx-header-icon-nudge:/.
 
 const headerTitle = rule('.wsx-header-title')
 ok('the label box is the shared box height', /height:\s*var\(--wsx-header-box\)/.test(headerTitle))
+/* The label must claim the free space, or the icon group sits beside the text
+   instead of on the sidebar's right edge. */
+ok('the label grows to push the controls right', /flex:\s*1 1 auto/.test(headerTitle))
 ok('the label box centres its text', /align-items:\s*center/.test(headerTitle))
 /* The text must not rely on a baseline: its own line box is inside the flex box. */
 const headerLabel = rule('.wsx-header-label')
@@ -86,6 +89,7 @@ check('the label box declares no line-height of its own',
 
 const headerActions = rule('.wsx-header-actions')
 ok('the controls use the shared box height', /height:\s*var\(--wsx-header-box\)/.test(headerActions))
+ok('the controls do not grow', /flex:\s*0 0 auto/.test(headerActions))
 ok('the controls centre on that box', /align-items:\s*center/.test(headerActions))
 ok('the controls apply the optical nudge', /transform:\s*translateY\(var\(--wsx-header-icon-nudge\)\)/.test(headerActions))
 /* One uniform gap for all three icons. */

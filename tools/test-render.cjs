@@ -106,7 +106,9 @@ const summary = (id, minutesAgo, extra) => ({
 const sessions = {
   ids: ['s1', 's2', 's3', 's4', 's5'],
   byId: {
-    s1: summary('s1', 1),
+    /* s1 is running via the summary flag alone: the status map has no baseline
+       entry for it, which is the case that broke the spinner in practice. */
+    s1: summary('s1', 1, { running: true }),
     s2: summary('s2', 2),
     s3: summary('s3', 3),
     s4: summary('s4', 4),
@@ -177,6 +179,8 @@ for (const tab of tabs) {
   const rows = count(tree, className => className.split(' ').includes('wsx-session'))
   const guides = count(tree, className => className.split(' ').includes('wsx-guide'))
   const chips = count(tree, className => className.split(' ').includes('wsx-chip'))
+  const spinners = count(tree, className => className.split(' ').includes('wsx-spinner'))
+  const times = count(tree, className => className.split(' ').includes('wsx-session-time'))
 
   if (tab === 'categories') {
     /* Two user categories plus the demoted Unassigned footer bar. */
@@ -195,7 +199,12 @@ for (const tab of tabs) {
   }
   /* The recent chip strip was removed on request; the Recent TAB remains. */
   ok('no chip strip is rendered', chips === 0)
-  console.log(tab + ': bars=' + bars + ' rows=' + rows + ' guides=' + guides + ' chips=' + chips)
+  /* s1 runs via its summary flag with no status-map entry: the spinner must
+     appear, and it must REPLACE that row's timestamp rather than join it. */
+  ok('a running session shows a spinner (' + spinners + ')', spinners === 1)
+  ok('the running row drops its timestamp', times === rows - 1)
+  console.log(tab + ': bars=' + bars + ' rows=' + rows + ' guides=' + guides
+    + ' chips=' + chips + ' spinners=' + spinners + ' times=' + times)
 }
 
 // --- the states that must not crash ---------------------------------------
