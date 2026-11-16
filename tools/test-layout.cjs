@@ -66,10 +66,37 @@ ok('the picker root carries the draft tone', /wsx-appearance wsx-tone-\$\{draft\
 const tabOn = rule('.wsx-tab-on')
 ok('the active tab is tinted', /background:\s*color-mix\(in srgb,\s*var\(--dsw-static-blue-500\)/.test(tabOn))
 
-// The header title and its trailing controls sit on one 24px row.
+// The header places the label and three icon squares on one optical centre line.
+const header = rule('.wsx-header')
+ok('the header row is a flex row', /display:\s*flex/.test(header))
+ok('the header row centres its children', /align-items:\s*center/.test(header))
+ok('the header row has a fixed height', /height:\s*var\(--wsx-header-h\)/.test(header))
+/* One variable owns the shared box, so the label and the icons cannot drift. */
+ok('a shared box variable is declared', /--wsx-header-box:\s*24px/.test(header))
+ok('a nudge variable exists for optical correction', /--wsx-header-icon-nudge:/.test(header))
+
+const headerTitle = rule('.wsx-header-title')
+ok('the label box is the shared box height', /height:\s*var\(--wsx-header-box\)/.test(headerTitle))
+ok('the label box centres its text', /align-items:\s*center/.test(headerTitle))
+/* The text must not rely on a baseline: its own line box is inside the flex box. */
+const headerLabel = rule('.wsx-header-label')
+ok('the label text carries its own line box', /line-height:\s*1\.2/.test(headerLabel))
+check('the label box declares no line-height of its own',
+  /line-height:/.test(headerTitle), false)
+
 const headerActions = rule('.wsx-header-actions')
-ok('header actions declare a matching height', /height:\s*24px/.test(headerActions))
-ok('the header title declares the same line height', /line-height:\s*24px/.test(rule('.wsx-header-title')))
+ok('the controls use the shared box height', /height:\s*var\(--wsx-header-box\)/.test(headerActions))
+ok('the controls centre on that box', /align-items:\s*center/.test(headerActions))
+ok('the controls apply the optical nudge', /transform:\s*translateY\(var\(--wsx-header-icon-nudge\)\)/.test(headerActions))
+/* One uniform gap for all three icons. */
+const actionGap = /gap:\s*(\d+)px/.exec(headerActions)
+ok('one uniform icon gap is declared', actionGap !== null)
+
+const iconBtn = rule('.wsx-icon-btn')
+ok('every icon sits in a fixed square', /width:\s*var\(--wsx-header-box\)/.test(iconBtn) && /height:\s*var\(--wsx-header-box\)/.test(iconBtn))
+ok('the icon square centres its glyph', /align-items:\s*center/.test(iconBtn) && /justify-content:\s*center/.test(iconBtn))
+/* An inline SVG leaves a baseline gap under it; forcing block removes it. */
+ok('glyphs inside the square are block-level', /\.wsx-icon-btn > svg\s*\{[\s\S]*?display:\s*block/.test(css))
 
 // --- 4. workspace and session titles share one left edge -------------------
 const number = (name) => {

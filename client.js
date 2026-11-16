@@ -1520,7 +1520,8 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'wsx-root' },
         h('div', { className: 'wsx-header' },
-          h('span', { className: 'wsx-header-title' }, t('section.workspaces')),
+          h('span', { className: 'wsx-header-title' },
+            h('span', { className: 'wsx-header-label' }, t('section.workspaces'))),
           h('span', { className: 'wsx-header-actions' },
             h('button', {
               type: 'button',
@@ -1615,46 +1616,76 @@ window.__ModuleLoader__.load({
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
 }
+/* The section header owns one fixed row height. Both the label and the three
+   trailing controls are placed on the SAME box height and centred by flex, so
+   none of them depends on a font baseline agreeing with an icon's bounds. */
 .wsx-header {
+  /* Geometry owner for the row. Changing --wsx-header-box moves the label box
+     and all three icon squares together, so they cannot drift apart. */
+  --wsx-header-h: 36px;
+  --wsx-header-box: 24px;
+  /* Optical nudge for the glyph column only; the row height is untouched. */
+  --wsx-header-icon-nudge: 0px;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  height: 36px;
+  height: var(--wsx-header-h);
   padding: 0 2px 0 0;
 }
-/* The title is sized to read level with the 24px trailing controls: a 15px
-   label on a 24px line box centres on the same optical row they do. */
+/* The label sits in a fixed box the same height as an icon button. The inner
+   span carries the line box, so the text centres on its own em box rather than
+   on the header's baseline grid. */
 .wsx-header-title {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   align-items: center;
   min-width: 0;
-  height: 24px;
+  height: var(--wsx-header-box);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
   font-size: 15px;
   font-weight: 500;
-  line-height: 24px;
 }
-/* The trailing controls share the title's optical row: same 24px box, no extra
-   vertical padding, so the label and all three glyphs centre together. */
-.wsx-header-actions { display: inline-flex; flex: 0 0 auto; gap: 2px; align-items: center; height: 24px; }
+.wsx-header-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 1.2 keeps the CJK glyphs clear of the box edges while staying centred. */
+  line-height: 1.2;
+}
+/* The controls group is one flex row of fixed 24px boxes with one uniform gap. */
+.wsx-header-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: var(--wsx-header-box);
+  /* Optical compensation only: nudge the glyph column against the label's
+     visual centre without touching the row height. */
+  transform: translateY(var(--wsx-header-icon-nudge));
+}
 .wsx-icon-btn {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  /* Every icon owns a fixed square, so glyph size never changes the row. */
+  width: var(--wsx-header-box);
+  height: var(--wsx-header-box);
   padding: 0;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   cursor: pointer;
+}
+/* Normalise each SVG inside its square: a block, centred, with no inline
+   baseline gap under the glyph. */
+.wsx-icon-btn > svg {
+  display: block;
+  flex: 0 0 auto;
 }
 .wsx-icon-btn:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-icon-btn:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }

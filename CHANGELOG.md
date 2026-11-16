@@ -27,6 +27,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The section header aligned its label and three trailing icons by relying on a
+  shared `line-height`, which left the text sitting slightly off the icons'
+  optical centre. The label and every icon now occupy the same fixed 24px box,
+  centred by flex `align-items`, with each SVG normalised to `display: block` so
+  no inline baseline gap survives. One variable owns that box, and a
+  `--wsx-header-icon-nudge` (`translateY`) is provided for sub-pixel optical
+  correction without changing the row height.
 - The "Workspaces" section title was 12px inside a 34px row while its three
   trailing buttons were 24px, so the label never lined up with the glyphs. The
   title is now 15px on the same 24px box the buttons occupy.
