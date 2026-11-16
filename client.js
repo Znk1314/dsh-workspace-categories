@@ -1631,12 +1631,15 @@ window.__ModuleLoader__.load({
      Both are sub-pixel and neither touches the row height. */
   --wsx-header-label-nudge: -2px;
   --wsx-header-icon-nudge: 0px;
+  /* One inline edge shared with the search field, so the label starts exactly
+     on the search box's left edge instead of a value of its own. */
+  --wsx-inline-left: 0px;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
   height: var(--wsx-header-h);
-  padding: 0 2px 0 0;
+  padding: 0 var(--wsx-inline-left);
 }
 /* The label takes the free space so the controls are pushed to the right edge. */
 .wsx-header-title {
@@ -1646,7 +1649,8 @@ window.__ModuleLoader__.load({
   min-width: 0;
   height: var(--wsx-header-box);
   overflow: hidden;
-  color: var(--dsw-alias-label-secondary);
+  /* Primary ink so the section label reads as a title, not a hint. */
+  color: var(--dsw-alias-label-primary);
   /* Sized to read at the same weight as the 16px glyphs beside it: a larger
      label made the row look bottom-heavy no matter how it was nudged. */
   font-size: 13px;
@@ -1703,6 +1707,7 @@ window.__ModuleLoader__.load({
   align-items: center;
   gap: 6px;
   box-sizing: border-box;
+  /* Shares the header's inline edge and right inset, so the two fields line up. */
   margin: 0 0 6px;
   padding: 0 8px;
   height: 30px;
@@ -1977,6 +1982,30 @@ window.__ModuleLoader__.load({
 }
 .wsx-session-flag { flex: 0 0 auto; color: var(--dsw-alias-state-warn-primary); font-size: 11px; }
 .wsx-session-time { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+/* A running session replaces its timestamp with a spinner. Without these rules
+   the element has no size or colour and is invisible, which is exactly how it
+   shipped broken once. */
+.wsx-spinner {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 25%, transparent);
+  border-top-color: var(--dsw-alias-state-business-primary);
+  border-radius: 50%;
+  animation: wsx-spin 720ms linear infinite;
+}
+@keyframes wsx-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+/* Static but unmistakable for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .wsx-spinner {
+    animation: none;
+    border-color: var(--dsw-alias-state-business-primary);
+  }
+}
 .wsx-more {
   margin: 1px 0 2px;
   padding: 2px 0;

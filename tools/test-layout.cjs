@@ -137,6 +137,35 @@ check('no strip markup remains', /wsx-recent-strip/.test(css), false)
 check('the Recent tab still exists', /renderRecent\b/.test(css), true)
 ok('the tab strip is still rendered', /wsx-tabs/.test(css))
 
+// --- 5. the running spinner is actually visible ----------------------------
+/* The row renders a .wsx-spinner element, but a render check alone cannot tell
+   whether it has any size or colour. It shipped once with the markup present and
+   no CSS at all, so it was invisible. Assert the painting rules exist. */
+const spinner = css.match(/\n\.wsx-spinner\s*\{([\s\S]*?)\}/)
+ok('a .wsx-spinner rule exists', spinner !== null)
+if (spinner !== null) {
+  ok('the spinner declares a width', /width:\s*\d+px/.test(spinner[1]))
+  ok('the spinner declares a height', /height:\s*\d+px/.test(spinner[1]))
+  ok('the spinner is round', /border-radius:\s*50%/.test(spinner[1]))
+  ok('the spinner has a visible ring', /border:\s*[\d.]+px solid/.test(spinner[1]))
+  ok('the spinner animates', /animation:\s*wsx-spin/.test(spinner[1]))
+}
+ok('the spin keyframes exist', /@keyframes wsx-spin\s*\{/.test(css))
+ok('the keyframes rotate', /@keyframes wsx-spin[\s\S]{0,160}rotate\(360deg\)/.test(css))
+ok('reduced motion is honoured', /prefers-reduced-motion[\s\S]{0,400}\.wsx-spinner/.test(css))
+/* The element must be emitted by the row, not merely styled. */
+ok('the row emits the spinner', /className:\s*'wsx-spinner'/.test(css))
+ok('the spinner branch replaces the timestamp',
+  /running\s*\n\s*\? h\('span', \{\s*\n\s*className: 'wsx-spinner'/.test(css))
+
+// --- 6. the section label matches the search field's left edge -------------
+const headerRule = rule('.wsx-header')
+ok('the header declares a shared inline edge', /--wsx-inline-left:/.test(headerRule))
+ok('the header pads from that edge', /padding:\s*0 var\(--wsx-inline-left\)/.test(headerRule))
+/* The label is primary ink, so it reads as a title rather than a hint. */
+ok('the section label uses primary ink',
+  /\.wsx-header-title\s*\{[\s\S]*?color:\s*var\(--dsw-alias-label-primary\)/.test(css))
+
 console.log('columns: guide=' + guideX + 'px folder=' + wsPad + 'px title=' + titleCol + 'px')
 console.log(failures === 0 ? 'ALL LAYOUT CHECKS PASSED' : failures + ' CHECK(S) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

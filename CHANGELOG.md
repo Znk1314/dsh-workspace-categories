@@ -27,6 +27,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The running-session spinner had **no CSS at all**. The row emitted a
+  `.wsx-spinner` element but no `.wsx-spinner` rule and no `@keyframes`
+  existed, so it rendered with zero size and zero colour — invisible. Both are
+  now present, with a reduced-motion fallback that shows a static ring.
+  `tools/test-layout.cjs` gains assertions for the spinner's size, ring,
+  animation, keyframes, and reduced-motion rule, which is the check that was
+  missing when it shipped broken.
+- The section label was secondary ink; it now uses primary ink.
+- The section label now shares one inline edge variable with the search field,
+  so its left end lines up with the search box's rounded edge.
 - The section label still read low at 13px with a -0.5px lift, so the optical
   nudge is now -2px. The font size stays at 13px; only the label moves.
 - The section label read bottom-heavy next to the icons at 15px; a CJK glyph's
