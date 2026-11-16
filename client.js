@@ -1,0 +1,2122 @@
+/**
+ * Browser half of the sidebar workspace skin bundle.
+ *
+ * Replaces the sidebar's workspace browsing region with a categorised view:
+ * every category is one rounded box holding an ordered set of workspaces, and
+ * a long press on a workspace header starts a drag that moves that workspace
+ * into another category (or re-orders it inside its own). Categories can be
+ * renamed, coloured, pinned, folded, deleted, and re-ordered. Workspaces
+ * belonging to no category stay in an "Unassigned" box so nothing disappears,
+ * and sessions that belong to no workspace stay in an "Other sessions" box for
+ * the same reason.
+ *
+ * `sidebar.workspaces` is a `single` slot, so this entry shadows the shipped
+ * browser by registering at a negative priority (SlotCore keeps the lowest
+ * priority and sorts ascending). Session rows still raise the shipped Session
+ * menu through the shared `useContextMenu` seat, and the shipped rename and
+ * archive dialogs keep working because they live in `shell.overlay`.
+ *
+ * Two structural rules shape this file:
+ *  - The sidebar establishes a containment context (its scroll region declares
+ *    `container-type`), which makes `position: fixed` resolve against the
+ *    sidebar rather than the viewport. Every overlay therefore renders through
+ *    a portal into `document.body`.
+ *  - Every drag-only operation has a menu path, so pointer, keyboard and touch
+ *    users can all file and reorder things.
+ */
+window.__ModuleLoader__.load({
+  id: 'dsh-workspace-categories',
+  factory(require) {
+    const React = require('react')
+    const ReactDOM = require('react-dom')
+    const h = React.createElement
+
+    /** Locale namespace owned by this plugin. */
+    const NS = 'workspaceSkin'
+    /** Host route serving the category document (see index.js). */
+    const DOC_ROUTE = '/api/workspace-categories.doc'
+    /** Lower than the shipped browser's implicit 0, so this entry wins the slot. */
+    const SHADOW_PRIORITY = -1000
+    /** How long a press holds before a drag starts. */
+    const LONG_PRESS_MS = 180
+    /** Movement that cancels the pending long press (a scroll or a click). */
+    const LONG_PRESS_SLOP_PX = 6
+    /** Workspaces rendered per box before "Show more". */
+    const BOX_LIMIT = 6
+    /** Debounce for writing the document to the Host. */
+    const SAVE_DEBOUNCE_MS = 240
+    /** Virtual category ids for the two buckets that have no stored category. */
+    const UNASSIGNED = '__unassigned__'
+    const OTHER_SESSIONS = '__other__'
+
+    /** Category accent choices; CSS maps each name to an accent custom property. */
+    const COLORS = ['brand', 'blue', 'green', 'amber', 'violet', 'rose', 'slate']
+
+    /** Document a first launch renders before the Host answers. */
+    const EMPTY_DOC = Object.freeze({
+      version: 1,
+      categories: [],
+      view: { mode: 'categories', archived: 'default' },
+      unassignedCollapsed: false,
+    })
+
+    /* ------------------------------------------------------------------ */
+    /* Icons — Client packages cannot be imported, so glyphs are inline     */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Build one 16-unit stroke glyph.
+     * @param path - SVG path data drawn in the current colour.
+     * @param size - rendered square size in CSS pixels.
+     * @returns the glyph element.
+     */
+    function glyph(path, size) {
+      return h('svg', {
+        viewBox: '0 0 16 16',
+        width: size ?? 14,
+        height: size ?? 14,
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: 1.4,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        'aria-hidden': 'true',
+        focusable: 'false',
+        className: 'wsx-glyph',
+      }, h('path', { d: path }))
+    }
+
+    const ICON = {
+      chevron: size => glyph('M6 4l4 4-4 4', size),
+      folder: size => glyph('M2 5.5A1.5 1.5 0 0 1 3.5 4h2.2l1.1 1.4h5.7A1.5 1.5 0 0 1 14 6.9v4.6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z', size),
+      plus: size => glyph('M8 3.5v9M3.5 8h9', size),
+      dots: size => glyph('M3 8h.01M8 8h.01M13 8h.01', size),
+      search: size => glyph('M7.2 12.4a5.2 5.2 0 1 0 0-10.4 5.2 5.2 0 0 0 0 10.4zM11 11l2.4 2.4', size),
+      sliders: size => glyph('M3 5.5h10M3 10.5h10M6 3.5v4M10 8.5v4', size),
+      close: size => glyph('M4.5 4.5l7 7M11.5 4.5l-7 7', size),
+      pin: size => glyph('M8 2.5l1.5 3.4 3.6.4-2.7 2.4.8 3.6L8 10.6l-3.2 1.7.8-3.6L2.9 6.3l3.6-.4z', size),
+      check: size => glyph('M3.5 8.5l3 3 6-6', size),
+      up: size => glyph('M8 12.5V4M4.5 7.5L8 4l3.5 3.5', size),
+      down: size => glyph('M8 3.5V12M4.5 8.5L8 12l3.5-3.5', size),
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Document helpers                                                    */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Build one immutable-document store.
+     * @returns the store handle.
+     */
+    function createDocStore() {
+      let current = EMPTY_DOC
+      const listeners = new Set()
+      return {
+        get: () => current,
+        subscribe(listener) {
+          listeners.add(listener)
+          return () => { listeners.delete(listener) }
+        },
+        replace(next) {
+          current = next
+          for (const listener of [...listeners]) listener()
+        },
+      }
+    }
+
+    /**
+     * Copy a document into the exact shape the Host validates, so no write can
+     * persist a hole or an unknown enum value.
+     * @param doc - candidate document.
+     * @returns the normalized document.
+     */
+    function normalize(doc) {
+      const source = doc ?? {}
+      const view = source.view ?? {}
+      return {
+        version: 1,
+        categories: (source.categories ?? []).map(category => ({
+          id: category.id,
+          name: category.name,
+          color: COLORS.includes(category.color) ? category.color : 'brand',
+          pinned: category.pinned === true,
+          collapsed: category.collapsed === true,
+          workspaceIds: [...(category.workspaceIds ?? [])],
+        })),
+        view: {
+          mode: view.mode === 'flat' ? 'flat' : 'categories',
+          archived: view.archived === 'show' || view.archived === 'only' ? view.archived : 'default',
+        },
+        unassignedCollapsed: source.unassignedCollapsed === true,
+      }
+    }
+
+    /**
+     * Mint a category id that cannot collide with an existing one.
+     * @param categories - current categories.
+     * @returns a fresh id.
+     */
+    function mintCategoryId(categories) {
+      const taken = new Set(categories.map(category => category.id))
+      let index = categories.length + 1
+      while (taken.has(`c${index}`)) index += 1
+      return `c${index}`
+    }
+
+    /**
+     * Move one id within a list, inserting it before an anchor.
+     * @param list - source order.
+     * @param id - id to move.
+     * @param before - anchor id, or undefined to append.
+     * @returns the new order, or the same array when the move changes nothing.
+     */
+    function moved(list, id, before) {
+      /* Dropping an item on its own top half names itself as the anchor; that
+         gesture is a no-op, not "move to the end". */
+      if (before === id) return list
+      const from = list.indexOf(id)
+      if (from === -1) return list
+      const next = list.filter(entry => entry !== id)
+      if (before === undefined) {
+        if (from === list.length - 1) return list
+        return [...next, id]
+      }
+      const at = next.indexOf(before)
+      if (at === -1) return list
+      if (at === from) return list
+      next.splice(at, 0, id)
+      return next
+    }
+
+    /**
+     * Insert one id into a list at an anchor position. Unlike {@link moved} the
+     * id need not already be present, which is what assigning a workspace to a
+     * different category needs.
+     * @param list - target order.
+     * @param id - id to insert.
+     * @param before - anchor id, or undefined to append.
+     * @returns the new order, or the same array when nothing would change.
+     */
+    function inserted(list, id, before) {
+      const next = list.filter(entry => entry !== id)
+      if (before === undefined) {
+        if (next.length === list.length && list[list.length - 1] === id) return list
+        return [...next, id]
+      }
+      const at = next.indexOf(before)
+      if (at === -1) return [...next, id]
+      next.splice(at, 0, id)
+      return next
+    }
+
+    /**
+     * Assign a workspace to one category, removing it from any other. A
+     * workspace is a member of at most one category.
+     * @param categories - current categories.
+     * @param workspaceId - workspace being moved.
+     * @param categoryId - destination category id.
+     * @param beforeId - anchor workspace inside the destination, or undefined.
+     * @returns updated categories, or the input when the move changes nothing.
+     */
+    function assignWorkspace(categories, workspaceId, categoryId, beforeId) {
+      if (beforeId === workspaceId) return categories
+      const destination = categories.find(category => category.id === categoryId)
+      if (destination === undefined) return categories
+      const owner = categories.find(category => category.workspaceIds.includes(workspaceId))
+      if (owner !== undefined && owner.id === categoryId) {
+        /* Re-ordering inside one box: skip a write that would not move anything. */
+        const next = moved(destination.workspaceIds, workspaceId, beforeId)
+        if (next === destination.workspaceIds) return categories
+      }
+      return categories.map((category) => {
+        const stripped = category.workspaceIds.filter(id => id !== workspaceId)
+        if (category.id !== categoryId) {
+          return stripped.length === category.workspaceIds.length
+            ? category
+            : { ...category, workspaceIds: stripped }
+        }
+        return { ...category, workspaceIds: inserted(stripped, workspaceId, beforeId) }
+      })
+    }
+
+    /**
+     * Drop a workspace from every category.
+     * @param categories - current categories.
+     * @param workspaceId - workspace leaving its category.
+     * @returns updated categories.
+     */
+    function withoutWorkspace(categories, workspaceId) {
+      return categories.map((category) => {
+        const stripped = category.workspaceIds.filter(id => id !== workspaceId)
+        return stripped.length === category.workspaceIds.length
+          ? category
+          : { ...category, workspaceIds: stripped }
+      })
+    }
+
+    /**
+     * Move one category to a new position among its own pinned group. Categories
+     * render pinned-first, so a cross-group drop has no meaning to honour and is
+     * refused by the caller.
+     * @param categories - current categories.
+     * @param categoryId - category being moved.
+     * @param beforeId - anchor category id, or undefined to append.
+     * @returns updated categories, or the input when the move changes nothing.
+     */
+    function reorderCategory(categories, categoryId, beforeId) {
+      const source = categories.find(category => category.id === categoryId)
+      if (source === undefined || beforeId === categoryId) return categories
+      const anchor = beforeId === undefined ? undefined : categories.find(category => category.id === beforeId)
+      if (anchor !== undefined && anchor.pinned !== source.pinned) return categories
+      const groupIds = categories
+        .filter(category => category.pinned === source.pinned)
+        .map(category => category.id)
+      const reordered = moved(groupIds, categoryId, beforeId)
+      if (reordered === groupIds) return categories
+      /* The stored array keeps both groups interleaved freely; only the
+         positions of the moving group are rewritten, in display order. */
+      let cursor = 0
+      return categories.map((category) => {
+        if (category.pinned !== source.pinned) return category
+        const id = reordered[cursor]
+        cursor += 1
+        return categories.find(entry => entry.id === id) ?? category
+      })
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Overlay host                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Render overlay content into `document.body`, because the sidebar is a
+     * containment context in which `position: fixed` resolves to the sidebar.
+     * @param children - overlay nodes.
+     * @returns the portal.
+     */
+    function Overlay({ children }) {
+      return ReactDOM.createPortal(children, document.body)
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Presentational pieces                                               */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * One modal: Escape and backdrop dismiss, Enter commits, initial focus seat,
+     * Tab confined to the dialog, focus returned to the invoker on close.
+     * @param props - open request, busy flag, locale seat, and settlement.
+     * @returns the dialog overlay, or null while closed.
+     */
+    function Dialog({ request, busy, t, onCancel, onSettle }) {
+      const [value, setValue] = React.useState('')
+      const ref = React.useRef(null)
+      const restoreRef = React.useRef(null)
+      React.useEffect(() => {
+        if (request === null) return undefined
+        setValue(request.initial ?? '')
+        restoreRef.current = document.activeElement
+        const onKey = (event) => {
+          if (event.key === 'Escape') {
+            event.stopPropagation()
+            onCancel()
+            return
+          }
+          if (event.key !== 'Tab' || ref.current === null) return
+          const seats = [...ref.current.querySelectorAll('button, input')]
+            .filter(node => !node.disabled)
+          if (seats.length === 0) return
+          const first = seats[0]
+          const last = seats[seats.length - 1]
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault()
+            last.focus()
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault()
+            first.focus()
+          }
+        }
+        document.addEventListener('keydown', onKey, true)
+        return () => {
+          document.removeEventListener('keydown', onKey, true)
+          const restore = restoreRef.current
+          restoreRef.current = null
+          if (restore !== null && typeof restore.focus === 'function' && document.contains(restore)) {
+            restore.focus({ preventScroll: true })
+          }
+        }
+      }, [request, onCancel])
+      React.useEffect(() => {
+        if (request === null) return
+        const seat = ref.current?.querySelector('[data-wsx-autofocus]')
+        if (seat === null || seat === undefined) return
+        seat.focus({ preventScroll: true })
+        if (typeof seat.select === 'function') seat.select()
+      }, [request])
+      if (request === null) return null
+      const isName = request.kind === 'name'
+      const blocked = busy || (isName && value.trim() === '')
+      return h(Overlay, null,
+        h('div', {
+          className: 'wsx-scrim',
+          onMouseDown: (event) => { if (event.target === event.currentTarget) onCancel() },
+        },
+        h('div', { className: 'wsx-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': request.title, ref },
+          h('div', { className: 'wsx-dialog-title' }, request.title),
+          isName
+            ? h('input', {
+              className: 'wsx-dialog-input',
+              value,
+              'data-wsx-autofocus': '',
+              'aria-label': request.title,
+              placeholder: request.placeholder ?? '',
+              maxLength: 80,
+              disabled: busy,
+              onChange: event => setValue(event.target.value),
+              onKeyDown: (event) => {
+                if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+                event.preventDefault()
+                if (!blocked) onSettle(value)
+              },
+            })
+            : h('div', { className: 'wsx-dialog-body' }, request.body),
+          h('div', { className: 'wsx-dialog-actions' },
+            h('button', { type: 'button', className: 'wsx-btn', onClick: onCancel, disabled: busy }, t('dialog.cancel')),
+            h('button', {
+              type: 'button',
+              className: request.danger === true ? 'wsx-btn wsx-btn-danger' : 'wsx-btn wsx-btn-primary',
+              'data-wsx-autofocus': isName ? undefined : '',
+              onClick: () => { if (!blocked) onSettle(value) },
+              disabled: blocked,
+            }, request.confirmLabel)))))
+    }
+
+    /**
+     * One anchored popup menu rendered at viewport coordinates: outside press,
+     * Escape, and selection dismiss it, and the arrow keys walk its rows.
+     * A row carrying `replaceWith` swaps the popup's rows in place, which is how
+     * a submenu works here: closing and re-opening would race the dismissal.
+     * @param props - open menu and its dismissal, plus the local row swap.
+     * @returns the menu overlay, or null while closed.
+     */
+    function PopupMenu({ menu, onClose, onActivate }) {
+      const ref = React.useRef(null)
+      React.useEffect(() => {
+        if (menu === null) return undefined
+        const onDown = (event) => {
+          if (ref.current !== null && ref.current.contains(event.target)) return
+          onClose()
+        }
+        const onKey = (event) => {
+          if (event.key === 'Escape') {
+            onClose()
+            return
+          }
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+          if (ref.current === null) return
+          const rows = [...ref.current.querySelectorAll('[role="menuitem"]:not(:disabled)')]
+          if (rows.length === 0) return
+          event.preventDefault()
+          const at = rows.indexOf(document.activeElement)
+          const next = event.key === 'ArrowDown'
+            ? rows[(at + 1) % rows.length]
+            : rows[(at - 1 + rows.length) % rows.length]
+          next.focus()
+        }
+        document.addEventListener('mousedown', onDown, true)
+        document.addEventListener('keydown', onKey, true)
+        const first = ref.current?.querySelector('[role="menuitem"]:not(:disabled)')
+        first?.focus({ preventScroll: true })
+        return () => {
+          document.removeEventListener('mousedown', onDown, true)
+          document.removeEventListener('keydown', onKey, true)
+        }
+      }, [menu, onClose])
+      if (menu === null) return null
+      const rows = menu.items
+      const style = {
+        left: Math.max(8, Math.min(menu.point.x, window.innerWidth - 252)),
+        top: Math.max(8, Math.min(menu.point.y, window.innerHeight - 16 - Math.min(rows.length, 14) * 34)),
+        maxHeight: Math.max(160, window.innerHeight - 24),
+      }
+      return h(Overlay, null,
+        h('div', { className: 'wsx-menu', role: 'menu', ref, style },
+          rows.map((item, index) => (item.separator === true
+            ? h('div', { key: `sep-${index}`, className: 'wsx-menu-sep', role: 'separator' })
+            : h('button', {
+              key: item.id,
+              type: 'button',
+              role: 'menuitem',
+              className: item.danger === true ? 'wsx-menu-item wsx-menu-danger' : 'wsx-menu-item',
+              disabled: item.disabled === true,
+              onClick: () => {
+                /* A submenu row swaps this popup's own rows and leaves it open;
+                   every other row runs once and the popup closes. */
+                onActivate(item)
+              },
+            },
+            h('span', { className: 'wsx-menu-icon' }, item.icon ?? null),
+            h('span', { className: 'wsx-menu-label' }, item.label),
+            item.checked === true ? h('span', { className: 'wsx-menu-check' }, ICON.check(12)) : null)))))
+    }
+
+    /**
+     * Compact relative time for one row.
+     * @param updatedAt - epoch milliseconds.
+     * @param now - current epoch milliseconds.
+     * @param t - the locale seat.
+     * @returns the label.
+     */
+    function timeLabel(updatedAt, now, t) {
+      const minutes = Math.max(0, Math.round((now - updatedAt) / 60000))
+      if (minutes < 1) return t('time.now')
+      if (minutes < 60) return t('time.minutes', { n: minutes })
+      const hours = Math.round(minutes / 60)
+      if (hours < 24) return t('time.hours', { n: hours })
+      const days = Math.round(hours / 24)
+      if (days < 30) return t('time.days', { n: days })
+      return t('time.months', { n: Math.round(days / 30) })
+    }
+
+    /**
+     * Status dot class for one session row.
+     * @param status - the Session UI status, when the roster has reported one.
+     * @param archived - whether the row is archived.
+     * @returns the class name.
+     */
+    function statusDotClass(status, archived) {
+      if (archived) return 'wsx-dot wsx-dot-archived'
+      if (status?.pendingInteraction !== undefined) return 'wsx-dot wsx-dot-warning'
+      if (status?.running === true) return 'wsx-dot wsx-dot-ongoing'
+      if (status?.completionUnread === true) return 'wsx-dot wsx-dot-done'
+      return 'wsx-dot wsx-dot-idle'
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* The browsing region                                                 */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Categorised workspace browser filling `sidebar.workspaces`.
+     * @param props - shell owner share, standard hooks, locale seat, injected
+     *   actions and document store, and the shared context-menu bindings.
+     * @returns the browsing region.
+     */
+    function WorkspaceSkin(props) {
+      const {
+        wide, expandSidebar, useSessions, useWorkspaces, useSessionStatus, usePanelInfo,
+        useContextMenu, t, actions, docStore, saveStore,
+      } = props
+      const doc = React.useSyncExternalStore(docStore.subscribe, docStore.get, docStore.get)
+      const saveFailure = React.useSyncExternalStore(saveStore.subscribe, saveStore.get, saveStore.get)
+      const workspaceState = useWorkspaces(state => state)
+      const list = useSessions(state => state)
+      const statuses = useSessionStatus(state => state)
+      const panelActive = usePanelInfo(info => info.activePanelId !== null)
+      const { getTriggerProps } = useContextMenu()
+
+      const [query, setQuery] = React.useState('')
+      const [menu, setMenu] = React.useState(null)
+      /** Latest open menu, read by callbacks that must not depend on render order. */
+      const menuRef = React.useRef(null)
+      menuRef.current = menu
+      const [dialog, setDialog] = React.useState(null)
+      const [drag, setDrag] = React.useState(null)
+      const [dropHint, setDropHint] = React.useState(null)
+      const [limits, setLimits] = React.useState({})
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState(null)
+      const dragRef = React.useRef(null)
+      const pressRef = React.useRef(null)
+      const closeMenu = React.useCallback(() => setMenu(null), [])
+      /**
+       * Run one menu row. A row that carries `replaceWith` opens its submenu by
+       * replacing the popup's rows at the same anchor and keeps it open; every
+       * other row performs its action once and closes the popup.
+       * Side effects stay out of the state updater, so React may render or
+       * replay the update without repeating them.
+       * @param item - the activated row.
+       */
+      const activateMenuItem = React.useCallback((item) => {
+        const open = menuRef.current
+        if (typeof item.replaceWith === 'function' && open !== null) {
+          setMenu({ point: open.point, items: item.replaceWith(open.point) })
+          return
+        }
+        setMenu(null)
+        item.run?.()
+      }, [])
+      const closeDialog = React.useCallback(() => setDialog(null), [])
+
+      const now = Date.now()
+      const currentSessionId = panelActive
+        ? undefined
+        : Object.values(list.byId).find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
+
+      const archivedSet = React.useMemo(
+        () => new Set(workspaceState.archivedSessionIds),
+        [workspaceState.archivedSessionIds],
+      )
+      const pinnedSet = React.useMemo(
+        () => new Set(workspaceState.pinnedSessionIds),
+        [workspaceState.pinnedSessionIds],
+      )
+      const workspaces = workspaceState.items
+      const byWorkspaceId = React.useMemo(
+        () => new Map(workspaces.map(workspace => [workspace.workspaceId, workspace])),
+        [workspaces],
+      )
+
+      /**
+       * Display title for one workspace: its stored title, else the directory
+       * name, so an automatically named workspace is never a blank row.
+       * @param workspace - the workspace row.
+       * @returns the label.
+       */
+      const workspaceTitle = (workspace) => {
+        if (typeof workspace.title === 'string' && workspace.title.trim() !== '') return workspace.title
+        const parts = workspace.path.split(/[\\/]+/).filter(part => part !== '')
+        return parts.length === 0 ? workspace.path : parts[parts.length - 1]
+      }
+
+      /** Categories in display order: pinned ones lead, each group keeps the stored order. */
+      const orderedCategories = React.useMemo(() => [
+        ...doc.categories.filter(category => category.pinned),
+        ...doc.categories.filter(category => !category.pinned),
+      ], [doc.categories])
+
+      /** Workspaces that belong to no category. */
+      const unassigned = React.useMemo(() => {
+        const assigned = new Set(doc.categories.flatMap(category => category.workspaceIds))
+        return workspaces.filter(workspace => !assigned.has(workspace.workspaceId))
+      }, [doc.categories, workspaces])
+
+      /** Sessions accounted to no workspace, so they stay reachable. */
+      const orphanSessionIds = React.useMemo(() => {
+        const accounted = new Set(workspaces.flatMap(workspace => workspace.sessionIds))
+        return list.ids.filter(id => !accounted.has(id) && list.byId[id] !== undefined)
+      }, [list, workspaces])
+
+      const normalizedQuery = query.trim().toLowerCase()
+      /** A query opens folded boxes and lifts the per-box row limit. */
+      const searching = normalizedQuery !== ''
+
+      /* ---------------------------------------------------------------- */
+      /* Long-press drag                                                   */
+      /* ---------------------------------------------------------------- */
+
+      const cancelPress = React.useCallback(() => {
+        const pending = pressRef.current
+        if (pending === null) return
+        window.clearTimeout(pending.timer)
+        window.removeEventListener('pointermove', pending.move, true)
+        window.removeEventListener('pointerup', pending.up, true)
+        window.removeEventListener('pointercancel', pending.up, true)
+        pressRef.current = null
+      }, [])
+
+      /** Start a press: hold still for LONG_PRESS_MS and a drag begins. */
+      const beginPress = React.useCallback((event, payload) => {
+        if (event.button !== 0 || payload.disabled === true) return
+        const origin = { x: event.clientX, y: event.clientY }
+        cancelPress()
+        const move = (moveEvent) => {
+          if (Math.abs(moveEvent.clientX - origin.x) > LONG_PRESS_SLOP_PX
+            || Math.abs(moveEvent.clientY - origin.y) > LONG_PRESS_SLOP_PX) cancelPress()
+        }
+        const timer = window.setTimeout(() => {
+          cancelPress()
+          const active = { ...payload, x: origin.x, y: origin.y }
+          dragRef.current = active
+          setDrag(active)
+          document.body.style.userSelect = 'none'
+        }, LONG_PRESS_MS)
+        const up = () => { cancelPress() }
+        pressRef.current = { timer, move, up }
+        window.addEventListener('pointermove', move, true)
+        window.addEventListener('pointerup', up, true)
+        window.addEventListener('pointercancel', up, true)
+      }, [cancelPress])
+
+      /**
+       * End the drag without committing: Escape, a lost pointer, or a window
+       * blur must never leave the ghost or the text-selection lock behind.
+       */
+      const abortDrag = React.useCallback(() => {
+        dragRef.current = null
+        setDrag(null)
+        setDropHint(null)
+        document.body.style.userSelect = ''
+      }, [])
+
+      React.useEffect(() => {
+        if (drag === null) return undefined
+        const drop = (event) => {
+          const active = dragRef.current
+          if (active !== null) {
+            const hint = resolveDropHint(active, event.clientX, event.clientY)
+            if (hint !== null) {
+              if (active.kind === 'workspace') {
+                actions.moveWorkspace(active.workspaceId, hint.categoryId, hint.beforeId)
+              } else {
+                actions.moveCategory(active.categoryId, hint.beforeCategoryId)
+              }
+            }
+          }
+          abortDrag()
+        }
+        const onMove = (event) => {
+          const active = dragRef.current
+          if (active === null) return
+          setDrag({ ...active, x: event.clientX, y: event.clientY })
+          setDropHint(resolveDropHint(active, event.clientX, event.clientY))
+        }
+        const onKey = (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          abortDrag()
+        }
+        window.addEventListener('pointermove', onMove, true)
+        window.addEventListener('pointerup', drop, true)
+        window.addEventListener('pointercancel', abortDrag, true)
+        window.addEventListener('blur', abortDrag)
+        document.addEventListener('keydown', onKey, true)
+        return () => {
+          window.removeEventListener('pointermove', onMove, true)
+          window.removeEventListener('pointerup', drop, true)
+          window.removeEventListener('pointercancel', abortDrag, true)
+          window.removeEventListener('blur', abortDrag)
+          document.removeEventListener('keydown', onKey, true)
+        }
+      }, [drag === null, actions, abortDrag])
+
+      React.useEffect(() => () => {
+        cancelPress()
+        document.body.style.userSelect = ''
+      }, [cancelPress])
+
+      /**
+       * Resolve the drop seat under a viewport point from the rendered DOM.
+       *
+       * Only real seats accept a drop: a workspace row names the row it inserts
+       * before, a box names its own append position, and the Unassigned box is
+       * the one deliberate way to unfile. The gaps between boxes and the empty
+       * tail of the list are not seats, so a sloppy release changes nothing.
+       * @param active - the drag in flight.
+       * @param x - viewport x.
+       * @param y - viewport y.
+       * @returns the resolved seat, or null when the point is not a valid one.
+       */
+      function resolveDropHint(active, x, y) {
+        const element = document.elementFromPoint(x, y)
+        if (element === null) return null
+        const box = element.closest('[data-wsx-cat]')
+        if (active.kind === 'category') {
+          if (box === null) return null
+          const anchorId = box.getAttribute('data-wsx-cat')
+          if (anchorId === UNASSIGNED || anchorId === OTHER_SESSIONS) return null
+          const moving = doc.categories.find(category => category.id === active.categoryId)
+          const anchor = doc.categories.find(category => category.id === anchorId)
+          /* Pinned boxes always render first, so a cross-group drop would be a
+             silent no-op; refuse it instead of pretending it worked. */
+          if (moving === undefined || anchor === undefined || moving.pinned !== anchor.pinned) return null
+          const ids = orderedCategories
+            .filter(category => category.pinned === moving.pinned)
+            .map(category => category.id)
+          const index = ids.indexOf(anchorId)
+          if (index === -1) return null
+          const rect = box.getBoundingClientRect()
+          const after = y > rect.top + rect.height / 2
+          return { categoryId: anchorId, beforeCategoryId: ids[index + (after ? 1 : 0)] }
+        }
+        if (box === null) return null
+        const categoryId = box.getAttribute('data-wsx-cat')
+        const rows = [...box.querySelectorAll('[data-wsx-item]')]
+        const row = element.closest('[data-wsx-item]')
+        /* Hovering the dragged row itself is never a seat: it would only ever
+           resolve to a no-op, and showing a marker there reads as a bug. */
+        if (row !== null && row.getAttribute('data-wsx-item') === active.workspaceId) return null
+        if (row === null || !rows.includes(row)) return { categoryId, beforeId: undefined, append: true }
+        const ids = rows.map(node => node.getAttribute('data-wsx-item'))
+        const index = ids.indexOf(row.getAttribute('data-wsx-item'))
+        const rect = row.getBoundingClientRect()
+        /* Split on the row's own midline so every row is one clear before/after
+           choice, which is what makes free re-ordering predictable. */
+        const after = y > rect.top + rect.height / 2
+        const beforeId = ids[index + (after ? 1 : 0)]
+        return { categoryId, beforeId, append: after && beforeId === undefined }
+      }
+
+      /* ---------------------------------------------------------------- */
+      /* Actions                                                           */
+      /* ---------------------------------------------------------------- */
+
+      const flashError = (reason) => {
+        setError(reason instanceof Error ? reason.message : String(reason))
+      }
+
+      const run = (task) => {
+        setError(null)
+        setBusy(true)
+        Promise.resolve()
+          .then(task)
+          .catch(flashError)
+          .finally(() => { setBusy(false) })
+      }
+
+      /**
+       * Open a menu against the invoking control. A keyboard activation reports
+       * (0, 0), so the anchor rectangle is the reliable source.
+       * @param event - the activating event.
+       * @param items - menu rows.
+       */
+      const openMenuAt = (event, items) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const rect = event.currentTarget?.getBoundingClientRect?.()
+        const point = event.clientX === 0 && event.clientY === 0 && rect !== undefined
+          ? { x: rect.left, y: rect.bottom }
+          : { x: event.clientX, y: event.clientY }
+        setMenu({ point, items })
+      }
+
+      /** Open the name prompt and hand the trimmed value to `commit`. */
+      const askName = (title, initial, commit) => {
+        setDialog({
+          kind: 'name',
+          title,
+          initial,
+          confirmLabel: t('dialog.save'),
+          onCommit: (value) => { commit(value.trim()) },
+        })
+      }
+
+      /** Categories that currently hold a workspace. */
+      const categoriesOwning = workspaceId =>
+        doc.categories.filter(category => category.workspaceIds.includes(workspaceId))
+
+      const moveCategoryBy = (categoryId, delta) => {
+        const source = doc.categories.find(category => category.id === categoryId)
+        if (source === undefined) return
+        const group = orderedCategories.filter(category => category.pinned === source.pinned)
+        const at = group.findIndex(category => category.id === categoryId)
+        const target = at + delta
+        if (target < 0 || target >= group.length) return
+        /* Re-insert before the neighbour the move must end up above. */
+        const before = delta > 0 ? group[target + 1]?.id : group[target].id
+        actions.moveCategory(categoryId, before)
+      }
+
+      const categoryMenuItems = (category) => {
+        const group = orderedCategories.filter(entry => entry.pinned === category.pinned)
+        const at = group.findIndex(entry => entry.id === category.id)
+        return [
+          {
+            id: 'rename',
+            label: t('menu.renameCategory'),
+            run: () => askName(t('dialog.renameCategory'), category.name, (name) => {
+              if (name !== '') actions.renameCategory(category.id, name)
+            }),
+          },
+          {
+            id: 'pin',
+            label: category.pinned ? t('menu.unpinCategory') : t('menu.pinCategory'),
+            run: () => { actions.toggleCategoryPinned(category.id) },
+          },
+          {
+            id: 'fold',
+            label: category.collapsed ? t('menu.expandCategory') : t('menu.collapseCategory'),
+            run: () => { actions.toggleCategoryCollapsed(category.id) },
+          },
+          { id: 'move-sep', separator: true },
+          {
+            id: 'up',
+            label: t('menu.moveUp'),
+            icon: ICON.up(12),
+            disabled: at <= 0,
+            run: () => { moveCategoryBy(category.id, -1) },
+          },
+          {
+            id: 'down',
+            label: t('menu.moveDown'),
+            icon: ICON.down(12),
+            disabled: at === -1 || at >= group.length - 1,
+            run: () => { moveCategoryBy(category.id, 1) },
+          },
+          { id: 'color-sep', separator: true },
+          ...COLORS.map(color => ({
+            id: `color-${color}`,
+            label: t(`color.${color}`),
+            checked: category.color === color,
+            run: () => { actions.setCategoryColor(category.id, color) },
+          })),
+          { id: 'delete-sep', separator: true },
+          {
+            id: 'delete',
+            label: t('menu.deleteCategory'),
+            danger: true,
+            run: () => {
+              setDialog({
+                kind: 'confirm',
+                title: t('dialog.deleteCategory'),
+                body: t('dialog.deleteCategoryBody', { name: category.name }),
+                confirmLabel: t('dialog.delete'),
+                danger: true,
+                onCommit: () => { actions.deleteCategory(category.id) },
+              })
+            },
+          },
+        ]
+      }
+
+      const workspaceMenuItems = (workspace) => {
+        const owners = categoriesOwning(workspace.workspaceId)
+        const items = [
+          {
+            id: 'new-session',
+            label: t('menu.newSession'),
+            run: () => { actions.startSession(workspace.workspaceId) },
+          },
+          { id: 'sep-1', separator: true },
+        ]
+        if (doc.categories.length > 0 || owners.length > 0) {
+          items.push({
+            id: 'move',
+            label: t('menu.moveToCategory'),
+            /* `keepOpen` swaps the rows of the popup in place instead of closing
+               it: the item list is owned by this menu, not by a second popup. */
+            keepOpen: true,
+            replaceWith: (point) => [
+              ...doc.categories.map(category => ({
+                id: `to-${category.id}`,
+                label: category.name,
+                checked: owners.some(owner => owner.id === category.id),
+                run: () => { actions.moveWorkspace(workspace.workspaceId, category.id, undefined) },
+              })),
+              ...(owners.length === 0 ? [] : [{
+                id: 'unassign',
+                label: t('menu.removeFromCategory'),
+                run: () => { actions.unassignWorkspace(workspace.workspaceId) },
+              }]),
+              { id: 'sub-back', separator: true },
+              {
+                id: 'sub-cancel',
+                label: t('menu.back'),
+                run: () => { /* Closing the popup is the whole action. */ },
+              },
+            ],
+          })
+        }
+        items.push(
+          {
+            id: 'rename',
+            label: t('menu.renameWorkspace'),
+            run: () => askName(t('dialog.renameWorkspace'), workspaceTitle(workspace), (name) => {
+              if (name !== '') run(() => actions.renameWorkspace(workspace.workspaceId, name))
+            }),
+          },
+          { id: 'sep-2', separator: true },
+          {
+            id: 'delete',
+            label: t('menu.deleteWorkspace'),
+            danger: true,
+            run: () => {
+              setDialog({
+                kind: 'confirm',
+                title: t('dialog.deleteWorkspace'),
+                body: t('dialog.deleteWorkspaceBody', { name: workspaceTitle(workspace) }),
+                confirmLabel: t('dialog.delete'),
+                danger: true,
+                onCommit: () => { run(() => actions.deleteWorkspace(workspace.workspaceId)) },
+              })
+            },
+          },
+        )
+        return items
+      }
+
+      /* ---------------------------------------------------------------- */
+      /* Rendering                                                        */
+      /* ---------------------------------------------------------------- */
+
+      /**
+       * Filter one membership list into displayable rows.
+       * @param membership - session ids claimed by the owner.
+       * @returns rows sorted pinned-first, then by recency.
+       */
+      function rowsOf(membership) {
+        const rows = membership.flatMap((id) => {
+          const summary = list.byId[id]
+          if (summary === undefined) return []
+          /* Subagent children are conversation internals, not sidebar entries. */
+          if (summary.origin === 'subagent') return []
+          /* One reusable blank row belongs to the New Session view; showing it
+             in every box would invent a session that does not exist yet. */
+          if (summary.blank && id !== currentSessionId) return []
+          const archived = archivedSet.has(id)
+          if (doc.view.archived === 'default' && archived) return []
+          if (doc.view.archived === 'only' && !archived) return []
+          if (searching && !summary.displayTitle.toLowerCase().includes(normalizedQuery)) return []
+          return [{ summary, archived }]
+        })
+        rows.sort((left, right) => {
+          const leftPinned = pinnedSet.has(left.summary.id) && !left.archived
+          const rightPinned = pinnedSet.has(right.summary.id) && !right.archived
+          if (leftPinned !== rightPinned) return leftPinned ? -1 : 1
+          return right.summary.updatedAt - left.summary.updatedAt
+        })
+        return rows
+      }
+
+      const renderSession = (row) => {
+        const { summary, archived } = row
+        const status = statuses.get(summary.id)
+        const classes = ['wsx-session']
+        if (summary.id === currentSessionId) classes.push('wsx-session-selected')
+        if (archived) classes.push('wsx-session-archived')
+        /* The shipped menu has nothing to act on for a blank session. */
+        const trigger = summary.blank
+          ? { tabIndex: 0 }
+          : getTriggerProps({
+            kind: 'session',
+            value: { sessionId: summary.id, displayTitle: summary.title ?? '' },
+          }, {
+            onKeyDown: (event) => {
+              if (event.target !== event.currentTarget) return
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+              event.preventDefault()
+              if (!archived) actions.openSession(summary.id)
+            },
+          })
+        return h('div', {
+          key: summary.id,
+          className: classes.join(' '),
+          role: 'treeitem',
+          'aria-level': 3,
+          'aria-disabled': archived ? 'true' : undefined,
+          title: summary.displayTitle,
+          onClick: () => {
+            if (archived) {
+              actions.notifyArchived()
+              return
+            }
+            actions.openSession(summary.id)
+          },
+          ...trigger,
+        },
+        h('span', { className: statusDotClass(status, archived), 'aria-hidden': 'true' }),
+        h('span', { className: 'wsx-session-title' },
+          summary.blank ? t('session.new') : summary.displayTitle),
+        status?.pendingInteraction === undefined
+          ? null
+          : h('span', { className: 'wsx-session-flag' }, t('session.awaiting')),
+        h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)))
+      }
+
+      /**
+       * One workspace row with its sessions.
+       * @param categoryId - owning box id, or null where a drop is meaningless.
+       * @param workspace - the workspace, or null for the orphan bucket.
+       * @param rows - session rows to render.
+       * @param draggable - whether this row can be picked up.
+       */
+      const renderWorkspace = (categoryId, workspace, rows, draggable) => {
+        const key = workspace === undefined ? OTHER_SESSIONS : workspace.workspaceId
+        const limitKey = `${categoryId}:${key}`
+        const limit = searching ? rows.length : (limits[limitKey] ?? BOX_LIMIT)
+        const visible = rows.slice(0, limit)
+        const hidden = rows.length - visible.length
+        const dragging = drag !== null && drag.kind === 'workspace'
+          && drag.workspaceId === key
+        const hint = dropHint !== null && dropHint.categoryId === categoryId
+          && dropHint.beforeId === key
+        const classes = ['wsx-workspace']
+        if (dragging) classes.push('wsx-workspace-dragging')
+        if (hint) classes.push('wsx-drop-before')
+        const canStart = draggable && categoryId !== null
+        return h('div', {
+          key,
+          className: classes.join(' '),
+          'data-wsx-item': canStart ? key : undefined,
+        },
+        h('div', {
+          className: canStart ? 'wsx-workspace-head wsx-grab' : 'wsx-workspace-head',
+          onPointerDown: canStart
+            ? event => beginPress(event, {
+              kind: 'workspace',
+              workspaceId: key,
+              categoryId,
+              disabled: event.target.closest('button') !== null,
+            })
+            : undefined,
+          onContextMenu: workspace === undefined
+            ? undefined
+            : event => openMenuAt(event, workspaceMenuItems(workspace)),
+        },
+        h('span', { className: 'wsx-workspace-icon', 'aria-hidden': 'true' }, ICON.folder(13)),
+        h('span', { className: 'wsx-workspace-title' },
+          workspace === undefined ? t('section.otherSessions') : workspaceTitle(workspace)),
+        h('span', { className: 'wsx-workspace-count' }, String(rows.length)),
+        workspace === undefined ? null : h('span', { className: 'wsx-workspace-actions' },
+          h('button', {
+            type: 'button',
+            className: 'wsx-icon-btn',
+            'aria-label': t('menu.newSession'),
+            title: t('menu.newSession'),
+            onClick: (event) => {
+              event.stopPropagation()
+              actions.startSession(workspace.workspaceId)
+            },
+          }, ICON.plus(13)),
+          h('button', {
+            type: 'button',
+            className: 'wsx-icon-btn',
+            'aria-label': t('menu.workspaceActions'),
+            title: t('menu.workspaceActions'),
+            onClick: event => openMenuAt(event, workspaceMenuItems(workspace)),
+          }, ICON.dots(13)))),
+        visible.length === 0
+          ? h('div', { className: 'wsx-cat-empty' },
+            searching ? t('box.noMatches') : t('box.noSessions'))
+          : h('div', { className: 'wsx-sessions', role: 'group' }, visible.map(row => renderSession(row))),
+        hidden > 0
+          ? h('button', {
+            type: 'button',
+            className: 'wsx-more',
+            onClick: () => setLimits(current => ({ ...current, [limitKey]: limit + BOX_LIMIT })),
+          }, t('box.showMore', { n: hidden }))
+          : null)
+      }
+
+      const draggingCategoryId = drag !== null && drag.kind === 'category' ? drag.categoryId : null
+
+      /**
+       * The insertion line that marks the append seat of one box. Without it the
+       * only seat with no row under it would give no feedback at all.
+       * @param categoryId - the box being hovered.
+       * @returns the line element, or null when this box is not the append seat.
+       */
+      const appendLine = (categoryId) => {
+        if (dropHint === null || dropHint.append !== true || dropHint.categoryId !== categoryId) return null
+        return h('div', { className: 'wsx-append-line', 'aria-hidden': 'true' })
+      }
+
+      const renderCategoryBox = (category) => {
+        const members = category.workspaceIds.flatMap((id) => {
+          const workspace = byWorkspaceId.get(id)
+          return workspace === undefined ? [] : [workspace]
+        })
+        /* A query opens folded boxes so a match is never hidden by a fold. */
+        const folded = category.collapsed && !searching
+        const dropped = dropHint !== null && dropHint.categoryId === category.id
+        const classes = ['wsx-cat', `wsx-cat-${category.color}`]
+        if (draggingCategoryId === category.id) classes.push('wsx-cat-dragging')
+        if (dropped) classes.push('wsx-cat-drop')
+        return h('div', {
+          key: category.id,
+          className: classes.join(' '),
+          'data-wsx-cat': category.id,
+        },
+        h('div', {
+          className: 'wsx-cat-head wsx-grab',
+          onPointerDown: event => beginPress(event, {
+            kind: 'category',
+            categoryId: category.id,
+            disabled: event.target.closest('button') !== null,
+          }),
+        },
+        h('button', {
+          type: 'button',
+          className: 'wsx-cat-fold',
+          'aria-expanded': !folded,
+          'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+          onClick: () => { actions.toggleCategoryCollapsed(category.id) },
+        }, h('span', { className: folded ? 'wsx-chevron' : 'wsx-chevron wsx-chevron-open' },
+          ICON.chevron(12))),
+        h('span', { className: 'wsx-cat-dot', 'aria-hidden': 'true' }),
+        h('span', { className: 'wsx-cat-name' }, category.name),
+        h('span', { className: 'wsx-cat-badge' }, String(members.length)),
+        category.pinned
+          ? h('span', { className: 'wsx-cat-pin', 'aria-hidden': 'true' }, ICON.pin(11))
+          : null,
+        h('button', {
+          type: 'button',
+          className: 'wsx-icon-btn',
+          'aria-label': t('menu.categoryActions'),
+          title: t('menu.categoryActions'),
+          onClick: event => openMenuAt(event, categoryMenuItems(category)),
+        }, ICON.dots(13))),
+        folded
+          ? null
+          : h('div', { className: 'wsx-cat-body' },
+            members.length === 0
+              ? h('div', { className: 'wsx-cat-empty' },
+                searching ? t('box.noMatches') : t('box.emptyCategory'))
+              : members.map(workspace =>
+                renderWorkspace(category.id, workspace, rowsOf(workspace.sessionIds), true)),
+            appendLine(category.id)))
+      }
+
+      const renderUnassigned = () => {
+        if (unassigned.length === 0) return null
+        const folded = doc.unassignedCollapsed && !searching
+        const dropped = dropHint !== null && dropHint.categoryId === UNASSIGNED
+        const classes = ['wsx-cat', 'wsx-cat-slate', 'wsx-cat-unassigned']
+        if (dropped) classes.push('wsx-cat-drop')
+        return h('div', {
+          key: UNASSIGNED,
+          className: classes.join(' '),
+          'data-wsx-cat': UNASSIGNED,
+        },
+        h('div', { className: 'wsx-cat-head' },
+          h('button', {
+            type: 'button',
+            className: 'wsx-cat-fold',
+            'aria-expanded': !folded,
+            'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+            onClick: () => { actions.toggleUnassignedCollapsed() },
+          }, h('span', { className: folded ? 'wsx-chevron' : 'wsx-chevron wsx-chevron-open' },
+            ICON.chevron(12))),
+          h('span', { className: 'wsx-cat-dot', 'aria-hidden': 'true' }),
+          h('span', { className: 'wsx-cat-name' }, t('section.unassigned')),
+          h('span', { className: 'wsx-cat-badge' }, String(unassigned.length))),
+        folded
+          ? null
+          : h('div', { className: 'wsx-cat-body' },
+            unassigned.map(workspace =>
+              renderWorkspace(UNASSIGNED, workspace, rowsOf(workspace.sessionIds), true)),
+            appendLine(UNASSIGNED)))
+      }
+
+      const renderOtherSessions = () => {
+        const rows = rowsOf(orphanSessionIds)
+        if (rows.length === 0) return null
+        return h('div', {
+          key: OTHER_SESSIONS,
+          className: 'wsx-cat wsx-cat-slate',
+          'data-wsx-cat': OTHER_SESSIONS,
+        }, h('div', { className: 'wsx-cat-head' },
+          h('span', { className: 'wsx-cat-dot', 'aria-hidden': 'true' }),
+          h('span', { className: 'wsx-cat-name' }, t('section.otherSessions')),
+          h('span', { className: 'wsx-cat-badge' }, String(rows.length))),
+        h('div', { className: 'wsx-cat-body' },
+          renderWorkspace(OTHER_SESSIONS, undefined, rows, false)))
+      }
+
+      const renderFlat = () => {
+        const memberships = [...workspaces.map(workspace => workspace.sessionIds), orphanSessionIds]
+        const rows = memberships
+          .flatMap(membership => rowsOf(membership))
+          .sort((left, right) => right.summary.updatedAt - left.summary.updatedAt)
+        if (rows.length === 0) {
+          return h('div', { className: 'wsx-cat-empty' },
+            searching ? t('box.noMatches') : t('box.noSessions'))
+        }
+        return rows.map(row => renderSession(row))
+      }
+
+      const addWorkspace = () => {
+        run(async () => {
+          const path = await actions.pickDirectory()
+          if (path === null || path === undefined) return
+          await actions.createWorkspace(path)
+        })
+      }
+
+      const viewMenuItems = () => [
+        {
+          id: 'mode',
+          label: doc.view.mode === 'categories' ? t('view.toFlat') : t('view.toCategories'),
+          run: () => { actions.setView({ mode: doc.view.mode === 'categories' ? 'flat' : 'categories' }) },
+        },
+        { id: 'sep-a', separator: true },
+        ...[
+          ['default', t('view.hideArchived')],
+          ['show', t('view.showArchived')],
+          ['only', t('view.onlyArchived')],
+        ].map(([value, label]) => ({
+          id: `archived-${value}`,
+          label,
+          checked: doc.view.archived === value,
+          run: () => { actions.setView({ archived: value }) },
+        })),
+      ]
+
+      /* Rail state: the shell keeps 36px controls and asks for expansion. */
+      if (!wide) {
+        return h('div', { className: 'wsx-root wsx-rail' },
+          h('button', {
+            type: 'button',
+            className: 'wsx-rail-btn',
+            'aria-label': t('section.workspaces'),
+            title: t('section.workspaces'),
+            onClick: expandSidebar,
+          }, ICON.folder(16)),
+          h('button', {
+            type: 'button',
+            className: 'wsx-rail-btn',
+            'aria-label': t('actions.addWorkspace'),
+            title: t('actions.addWorkspace'),
+            onClick: () => { expandSidebar(); addWorkspace() },
+          }, ICON.plus(16)))
+      }
+
+      const loadFailed = workspaceState.state === 'error'
+      const notReady = workspaceState.phase !== 'ready'
+
+      const bodyContent = loadFailed
+        ? h('div', { className: 'wsx-error', role: 'alert' },
+          h('div', null, workspaceState.error?.message ?? t('section.loadFailed')),
+          h('button', {
+            type: 'button',
+            className: 'wsx-link',
+            onClick: () => { window.location.reload() },
+          }, t('section.retry')))
+        : notReady
+          ? h('div', { className: 'wsx-loading' }, t('section.loading'))
+          : doc.view.mode === 'flat'
+            ? h('div', { className: 'wsx-cat wsx-cat-flat' },
+              h('div', { className: 'wsx-cat-body' }, renderFlat()))
+            : [
+              ...orderedCategories.map(category => renderCategoryBox(category)),
+              renderUnassigned(),
+              renderOtherSessions(),
+              doc.categories.length === 0 && unassigned.length === 0 && workspaces.length === 0
+                ? h('div', { className: 'wsx-cat-empty' }, t('section.noWorkspaces'))
+                : null,
+            ]
+
+      const draggedLabel = drag === null
+        ? ''
+        : drag.kind === 'workspace'
+          ? (byWorkspaceId.get(drag.workspaceId) === undefined
+            ? (drag.workspaceId === OTHER_SESSIONS ? t('section.otherSessions') : '')
+            : workspaceTitle(byWorkspaceId.get(drag.workspaceId)))
+          : doc.categories.find(category => category.id === drag.categoryId)?.name ?? ''
+
+      return h('div', { className: 'wsx-root' },
+        h('div', { className: 'wsx-header' },
+          h('span', { className: 'wsx-header-title' }, t('section.workspaces')),
+          h('span', { className: 'wsx-header-actions' },
+            h('button', {
+              type: 'button',
+              className: 'wsx-icon-btn',
+              'aria-label': t('actions.newCategory'),
+              title: t('actions.newCategory'),
+              onClick: () => askName(t('dialog.newCategory'), '', (name) => {
+                actions.createCategory(name === '' ? t('dialog.newCategory') : name)
+              }),
+            }, ICON.plus(14)),
+            h('button', {
+              type: 'button',
+              className: 'wsx-icon-btn',
+              'aria-label': t('actions.addWorkspace'),
+              title: t('actions.addWorkspace'),
+              onClick: addWorkspace,
+            }, ICON.folder(14)),
+            h('button', {
+              type: 'button',
+              className: 'wsx-icon-btn',
+              'aria-label': t('actions.viewOptions'),
+              title: t('actions.viewOptions'),
+              onClick: event => openMenuAt(event, viewMenuItems()),
+            }, ICON.sliders(14)))),
+        h('div', { className: 'wsx-search' },
+          h('span', { className: 'wsx-search-icon', 'aria-hidden': 'true' }, ICON.search(13)),
+          h('input', {
+            className: 'wsx-search-input',
+            type: 'search',
+            value: query,
+            placeholder: t('search.placeholder'),
+            'aria-label': t('search.placeholder'),
+            onChange: event => setQuery(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key !== 'Escape') return
+              event.stopPropagation()
+              setQuery('')
+            },
+          }),
+          query === ''
+            ? null
+            : h('button', {
+              type: 'button',
+              className: 'wsx-icon-btn',
+              'aria-label': t('search.clear'),
+              onClick: () => setQuery(''),
+            }, ICON.close(12))),
+        saveFailure === null
+          ? null
+          : h('div', { className: 'wsx-notice', role: 'status' }, t('section.saveFailed')),
+        error === null ? null : h('div', { className: 'wsx-error', role: 'alert' }, error),
+        h('div', {
+          className: 'wsx-body',
+          role: 'tree',
+          'aria-label': t('section.workspaces'),
+        }, bodyContent),
+        drag === null
+          ? null
+          : h(Overlay, null,
+            h('div', {
+              className: 'wsx-ghost',
+              style: { left: drag.x + 12, top: drag.y + 12 },
+            }, draggedLabel)),
+        h(PopupMenu, { menu, onClose: closeMenu, onActivate: activateMenuItem }),
+        h(Dialog, {
+          request: dialog,
+          busy,
+          t,
+          onCancel: closeDialog,
+          onSettle: (value) => {
+            const active = dialog
+            closeDialog()
+            active?.onCommit?.(value)
+          },
+        }))
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Stylesheet                                                          */
+    /* ------------------------------------------------------------------ */
+
+    const STYLES = `
+.wsx-root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+}
+.wsx-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 4px 0 0;
+}
+.wsx-header-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.wsx-header-actions { display: inline-flex; gap: 2px; align-items: center; }
+.wsx-icon-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+}
+.wsx-icon-btn:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-icon-btn:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.wsx-search {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  margin: 0 0 6px;
+  padding: 0 8px;
+  height: 30px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.wsx-search-icon { display: inline-flex; color: var(--dsw-alias-label-tertiary); }
+.wsx-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+.wsx-search-input::placeholder { color: var(--dsw-alias-label-tertiary); }
+.wsx-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 12px;
+}
+.wsx-loading, .wsx-cat-empty {
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.wsx-error {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.wsx-notice {
+  flex: 0 0 auto;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: 12px;
+}
+.wsx-link {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.wsx-cat {
+  --wsx-accent: var(--dsw-alias-state-business-primary);
+  flex: 0 0 auto;
+  padding: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-1);
+  transition: border-color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+}
+.wsx-cat-drop { border-color: var(--wsx-accent); box-shadow: 0 0 0 1px var(--wsx-accent); }
+.wsx-cat-dragging { opacity: 0.5; }
+.wsx-cat-blue { --wsx-accent: var(--dsw-static-blue-500); }
+.wsx-cat-green { --wsx-accent: var(--dsw-alias-state-success-primary); }
+.wsx-cat-amber { --wsx-accent: var(--dsw-alias-state-warn-primary); }
+.wsx-cat-violet { --wsx-accent: var(--dsw-static-violet-600); }
+.wsx-cat-rose { --wsx-accent: var(--dsw-static-red-500); }
+.wsx-cat-slate { --wsx-accent: var(--dsw-alias-state-idle-primary); }
+.wsx-cat-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 2px 0 4px;
+  border-radius: var(--dsw-radius-sm);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.wsx-cat-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-grab { cursor: grab; }
+.wsx-grab:active { cursor: grabbing; }
+.wsx-cat-fold {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+.wsx-chevron { display: inline-flex; transition: transform 120ms ease; }
+.wsx-chevron-open { transform: rotate(90deg); }
+.wsx-cat-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--wsx-accent);
+}
+.wsx-cat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.wsx-cat-badge {
+  flex: 0 0 auto;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+.wsx-cat-pin { display: inline-flex; color: var(--wsx-accent); }
+.wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 2px 2px; }
+.wsx-workspace { padding: 1px 0; border-radius: var(--dsw-radius-md); }
+.wsx-workspace-dragging { opacity: 0.45; }
+.wsx-drop-before { box-shadow: inset 0 2px 0 0 var(--wsx-accent); }
+.wsx-append-line {
+  height: 2px;
+  margin: 1px 0 1px 6px;
+  border-radius: 1px;
+  background: var(--wsx-accent);
+}
+.wsx-workspace-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsh-sidebar-label-gap, 6px);
+  height: 28px;
+  padding: 0 4px 0 6px;
+  border-radius: var(--dsw-radius-sm);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.wsx-workspace-head:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-workspace-icon { display: inline-flex; flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); }
+.wsx-workspace-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+}
+.wsx-workspace-count { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.wsx-workspace-actions { display: none; gap: 1px; align-items: center; }
+.wsx-workspace-head:hover .wsx-workspace-actions { display: inline-flex; }
+.wsx-workspace-head:hover .wsx-workspace-count { display: none; }
+/* Touch has no hover, so the only non-drag way to file a workspace must stay visible. */
+@media (hover: none) {
+  .wsx-workspace-actions { display: inline-flex; }
+  .wsx-workspace-count { display: none; }
+}
+.wsx-sessions { display: flex; flex-direction: column; gap: 1px; }
+.wsx-session {
+  display: flex;
+  align-items: center;
+  gap: var(--dsh-sidebar-label-gap, 6px);
+  height: 32px;
+  padding: 0 8px 0 16px;
+  border-radius: var(--dsw-radius-md);
+  cursor: pointer;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.wsx-session:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-session:focus-visible { box-shadow: inset 0 0 0 1px var(--dsw-alias-state-business-primary); }
+.wsx-session-selected { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-session-archived { opacity: 0.55; cursor: default; }
+.wsx-session-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+}
+.wsx-session-flag { flex: 0 0 auto; color: var(--dsw-alias-state-warn-primary); font-size: 11px; }
+.wsx-session-time { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.wsx-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; }
+.wsx-dot-idle { background: var(--dsw-alias-state-idle-primary); }
+.wsx-dot-ongoing { background: var(--dsw-alias-state-business-primary); }
+.wsx-dot-warning { background: var(--dsw-alias-state-warn-primary); }
+.wsx-dot-done { background: var(--dsw-alias-state-success-primary); }
+.wsx-dot-archived { background: var(--dsw-alias-state-idle-primary); opacity: 0.4; }
+.wsx-more {
+  margin: 1px 0 2px 16px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.wsx-more:hover { color: var(--dsw-alias-label-primary); }
+.wsx-rail { align-items: center; gap: 2px; padding-top: 6px; }
+.wsx-rail-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.wsx-rail-btn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.wsx-glyph { pointer-events: none; }
+.wsx-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 200px;
+  max-width: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-menu-surface-fill);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 16%), 0 0 0 0.5px var(--dsw-alias-border-l2);
+}
+.wsx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.wsx-menu-item:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-menu-item:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -2px; }
+.wsx-menu-item:disabled { opacity: 0.45; cursor: default; }
+.wsx-menu-danger { color: var(--dsw-alias-state-error-primary); }
+.wsx-menu-icon { display: inline-flex; width: 12px; color: inherit; }
+.wsx-menu-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsx-menu-check { display: inline-flex; color: var(--dsw-alias-state-business-primary); }
+.wsx-menu-sep { height: 1px; margin: 4px 6px; background: var(--dsw-alias-border-l2); }
+.wsx-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dsw-alias-bg-mask-1);
+}
+.wsx-dialog {
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-overlay);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 24%);
+}
+.wsx-dialog-title { margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+.wsx-dialog-body { margin-bottom: 14px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 1.5; }
+.wsx-dialog-input {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  outline: none;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+.wsx-dialog-input:focus { border-color: var(--dsw-alias-state-business-primary); }
+.wsx-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.wsx-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wsx-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.wsx-btn:disabled { opacity: 0.5; cursor: default; }
+.wsx-btn-primary {
+  border-color: transparent;
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+.wsx-btn-primary:hover:not(:disabled) { background: var(--dsw-alias-brand-primary); filter: brightness(1.15); }
+.wsx-btn-danger { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+.wsx-ghost {
+  position: fixed;
+  z-index: 1400;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 4px 10px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-overlay);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wsx-cat, .wsx-chevron { transition: none; }
+}
+`
+
+    /* ------------------------------------------------------------------ */
+    /* Dictionaries                                                        */
+    /* ------------------------------------------------------------------ */
+
+    const zh = {
+      'section.workspaces': '\u5de5\u4f5c\u533a',
+      'section.unassigned': '\u672a\u5206\u7c7b',
+      'section.otherSessions': '\u5176\u4ed6\u4f1a\u8bdd',
+      'section.loading': '\u6b63\u5728\u8f7d\u5165\u5de5\u4f5c\u533a\u2026',
+      'section.loadFailed': '\u5de5\u4f5c\u533a\u5217\u8868\u52a0\u8f7d\u5931\u8d25\u3002',
+      'section.retry': '\u91cd\u65b0\u52a0\u8f7d\u9875\u9762',
+      'section.noWorkspaces': '\u8fd8\u6ca1\u6709\u5de5\u4f5c\u533a\u3002\u7528\u4e0a\u65b9\u7684\u6587\u4ef6\u5939\u6309\u94ae\u6dfb\u52a0\u4e00\u4e2a\u3002',
+      'section.saveFailed': '\u5206\u7c7b\u6682\u65f6\u65e0\u6cd5\u4fdd\u5b58\uff0c\u6b63\u5728\u91cd\u8bd5\u3002\u4fee\u6539\u5148\u4fdd\u7559\u5728\u9875\u9762\u91cc\uff0c\u4f46\u5237\u65b0\u540e\u53ef\u80fd\u4e22\u5931\u3002',
+      'search.placeholder': '\u641c\u7d22\u4f1a\u8bdd',
+      'search.clear': '\u6e05\u9664\u641c\u7d22',
+      'actions.newCategory': '\u65b0\u5efa\u5206\u7c7b',
+      'actions.addWorkspace': '\u6dfb\u52a0\u5de5\u4f5c\u533a',
+      'actions.viewOptions': '\u89c6\u56fe\u9009\u9879',
+      'view.toCategories': '\u6539\u4e3a\u6309\u5206\u7c7b\u663e\u793a',
+      'view.toFlat': '\u6539\u4e3a\u5e73\u94fa\u663e\u793a',
+      'view.hideArchived': '\u9690\u85cf\u5df2\u5f52\u6863',
+      'view.showArchived': '\u663e\u793a\u5df2\u5f52\u6863',
+      'view.onlyArchived': '\u53ea\u770b\u5df2\u5f52\u6863',
+      'box.emptyCategory': '\u957f\u6309\u5de5\u4f5c\u533a\u6807\u9898\u628a\u5b83\u62d6\u8fdb\u6765\uff0c\u6216\u7528\u5de5\u4f5c\u533a\u7684\u300c\u2026\u300d\u83dc\u5355\u9009\u300c\u79fb\u5230\u5206\u7c7b\u300d\u3002',
+      'box.noSessions': '\u8fd8\u6ca1\u6709\u4f1a\u8bdd',
+      'box.noMatches': '\u6ca1\u6709\u5339\u914d\u7684\u4f1a\u8bdd',
+      'box.showMore': '\u663e\u793a\u66f4\u591a\uff08{n}\uff09',
+      'session.new': '\u65b0\u4f1a\u8bdd',
+      'session.awaiting': '\u5f85\u5904\u7406',
+      'time.now': '\u521a\u521a',
+      'time.minutes': '{n} \u5206\u949f',
+      'time.hours': '{n} \u5c0f\u65f6',
+      'time.days': '{n} \u5929',
+      'time.months': '{n} \u4e2a\u6708',
+      'color.brand': '\u9ed8\u8ba4\u84dd',
+      'color.blue': '\u5929\u84dd',
+      'color.green': '\u7eff\u8272',
+      'color.amber': '\u7425\u73c0',
+      'color.violet': '\u7d2b\u8272',
+      'color.rose': '\u7396\u7ea2',
+      'color.slate': '\u7070\u8272',
+      'menu.renameCategory': '\u91cd\u547d\u540d\u5206\u7c7b',
+      'menu.pinCategory': '\u7f6e\u9876\u5206\u7c7b',
+      'menu.unpinCategory': '\u53d6\u6d88\u7f6e\u9876',
+      'menu.collapseCategory': '\u6536\u8d77\u5206\u7c7b',
+      'menu.expandCategory': '\u5c55\u5f00\u5206\u7c7b',
+      'menu.deleteCategory': '\u5220\u9664\u5206\u7c7b',
+      'menu.moveUp': '\u4e0a\u79fb\u5206\u7c7b',
+      'menu.moveDown': '\u4e0b\u79fb\u5206\u7c7b',
+      'menu.categoryActions': '\u5206\u7c7b\u64cd\u4f5c',
+      'menu.workspaceActions': '\u5de5\u4f5c\u533a\u64cd\u4f5c',
+      'menu.newSession': '\u65b0\u5efa\u4f1a\u8bdd',
+      'menu.moveToCategory': '\u79fb\u5230\u5206\u7c7b',
+      'menu.back': '\u53d6\u6d88',
+      'menu.removeFromCategory': '\u79fb\u51fa\u5206\u7c7b',
+      'menu.renameWorkspace': '\u91cd\u547d\u540d\u5de5\u4f5c\u533a',
+      'menu.deleteWorkspace': '\u5220\u9664\u5de5\u4f5c\u533a',
+      'dialog.newCategory': '\u65b0\u5efa\u5206\u7c7b',
+      'dialog.renameCategory': '\u91cd\u547d\u540d\u5206\u7c7b',
+      'dialog.renameWorkspace': '\u91cd\u547d\u540d\u5de5\u4f5c\u533a',
+      'dialog.deleteCategory': '\u5220\u9664\u5206\u7c7b',
+      'dialog.deleteCategoryBody': '\u5220\u9664\u300c{name}\u300d\u540e\uff0c\u91cc\u9762\u7684\u5de5\u4f5c\u533a\u4f1a\u56de\u5230\u300c\u672a\u5206\u7c7b\u300d\uff0c\u4e0d\u4f1a\u5220\u9664\u4efb\u4f55\u4f1a\u8bdd\u3002',
+      'dialog.deleteWorkspace': '\u5220\u9664\u5de5\u4f5c\u533a',
+      'dialog.deleteWorkspaceBody': '\u5220\u9664\u300c{name}\u300d\u53ea\u4f1a\u79fb\u9664\u5de5\u4f5c\u533a\u767b\u8bb0\uff0c\u76ee\u5f55\u548c\u4f1a\u8bdd\u8bb0\u5f55\u90fd\u4f1a\u4fdd\u7559\u3002',
+      'dialog.save': '\u4fdd\u5b58',
+      'dialog.delete': '\u5220\u9664',
+      'dialog.cancel': '\u53d6\u6d88',
+    }
+
+    const en = {
+      'section.workspaces': 'Workspaces',
+      'section.unassigned': 'Unassigned',
+      'section.otherSessions': 'Other sessions',
+      'section.loading': 'Loading workspaces…',
+      'section.loadFailed': 'Could not load the workspace list.',
+      'section.retry': 'Reload the page',
+      'section.noWorkspaces': 'No workspaces yet. Use the folder button above to add one.',
+      'section.saveFailed': 'Categories cannot be saved right now; retrying. Changes stay on this page but may be lost after a reload.',
+      'search.placeholder': 'Search sessions',
+      'search.clear': 'Clear search',
+      'actions.newCategory': 'New category',
+      'actions.addWorkspace': 'Add workspace',
+      'actions.viewOptions': 'View options',
+      'view.toCategories': 'Group by category',
+      'view.toFlat': 'One flat list',
+      'view.hideArchived': 'Hide archived',
+      'view.showArchived': 'Show archived',
+      'view.onlyArchived': 'Only archived',
+      'box.emptyCategory': 'Press and hold a workspace title to drag it here, or choose Move to category from its … menu.',
+      'box.noSessions': 'No sessions yet',
+      'box.noMatches': 'No matching sessions',
+      'box.showMore': 'Show more ({n})',
+      'session.new': 'New session',
+      'session.awaiting': 'Waiting',
+      'time.now': 'now',
+      'time.minutes': '{n}min',
+      'time.hours': '{n}h',
+      'time.days': '{n}d',
+      'time.months': '{n}mo',
+      'color.brand': 'Default blue',
+      'color.blue': 'Sky blue',
+      'color.green': 'Green',
+      'color.amber': 'Amber',
+      'color.violet': 'Violet',
+      'color.rose': 'Rose',
+      'color.slate': 'Grey',
+      'menu.renameCategory': 'Rename category',
+      'menu.pinCategory': 'Pin category',
+      'menu.unpinCategory': 'Unpin category',
+      'menu.collapseCategory': 'Collapse category',
+      'menu.expandCategory': 'Expand category',
+      'menu.deleteCategory': 'Delete category',
+      'menu.moveUp': 'Move category up',
+      'menu.moveDown': 'Move category down',
+      'menu.categoryActions': 'Category actions',
+      'menu.workspaceActions': 'Workspace actions',
+      'menu.newSession': 'New session',
+      'menu.moveToCategory': 'Move to category',
+      'menu.back': 'Cancel',
+      'menu.removeFromCategory': 'Remove from category',
+      'menu.renameWorkspace': 'Rename workspace',
+      'menu.deleteWorkspace': 'Delete workspace',
+      'dialog.newCategory': 'New category',
+      'dialog.renameCategory': 'Rename category',
+      'dialog.renameWorkspace': 'Rename workspace',
+      'dialog.deleteCategory': 'Delete category',
+      'dialog.deleteCategoryBody': 'Deleting "{name}" moves its workspaces back to Unassigned. No session is deleted.',
+      'dialog.deleteWorkspace': 'Delete workspace',
+      'dialog.deleteWorkspaceBody': 'Deleting "{name}" only removes the workspace registration; its directory and session logs are kept.',
+      'dialog.save': 'Save',
+      'dialog.delete': 'Delete',
+      'dialog.cancel': 'Cancel',
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Plugin                                                              */
+    /* ------------------------------------------------------------------ */
+
+    return {
+      inject: ['slots', 'locale', 'sessions', 'workspaces', 'uiWorkspace'],
+      apply(ctx) {
+        const store = createDocStore()
+        /** Save health as its own observable, so a failed write reaches the UI. */
+        const saveStore = (() => {
+          let current = null
+          const listeners = new Set()
+          return {
+            get: () => current,
+            subscribe(listener) {
+              listeners.add(listener)
+              return () => { listeners.delete(listener) }
+            },
+            set(next) {
+              if (next === current) return
+              current = next
+              for (const listener of [...listeners]) listener()
+            },
+          }
+        })()
+        let saveTimer = 0
+        let disposed = false
+        let wrote = false
+
+        /**
+         * Write the document to the Host. A non-OK answer is a failed save, not
+         * a silent no-op: the user is told, because categories that look saved
+         * and are not would be lost on the next reload.
+         * @returns the storage notice to show, or null once the write settles.
+         */
+        const flushSave = async () => {
+          try {
+            const response = await fetch(DOC_ROUTE, {
+              method: 'PUT',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(store.get()),
+            })
+            if (!response.ok) throw new Error(`save failed (HTTP ${response.status})`)
+            saveStore.set(null)
+            return null
+          } catch (reason) {
+            const notice = reason instanceof Error ? reason.message : String(reason)
+            saveStore.set(notice)
+            return notice
+          }
+        }
+
+        const persist = () => {
+          if (disposed) return
+          window.clearTimeout(saveTimer)
+          saveTimer = window.setTimeout(() => { void flushSave() }, SAVE_DEBOUNCE_MS)
+        }
+
+        const update = (mutate) => {
+          const before = store.get()
+          const next = normalize(mutate(before))
+          /* A gesture that changes nothing must not rewrite the document. */
+          if (JSON.stringify(next) === JSON.stringify(before)) return
+          wrote = true
+          store.replace(next)
+          persist()
+        }
+
+        const uiWorkspace = ctx.get('uiWorkspace')
+        const workspaces = ctx.get('workspaces')
+        const contextMenus = ctx.get('contextMenus')
+
+        const actions = {
+          moveWorkspace: (workspaceId, categoryId, beforeId) => {
+            update(doc => ({
+              ...doc,
+              categories: categoryId === UNASSIGNED
+                ? withoutWorkspace(doc.categories, workspaceId)
+                : assignWorkspace(doc.categories, workspaceId, categoryId, beforeId),
+            }))
+          },
+          unassignWorkspace: (workspaceId) => {
+            update(doc => ({ ...doc, categories: withoutWorkspace(doc.categories, workspaceId) }))
+          },
+          moveCategory: (categoryId, beforeCategoryId) => {
+            update(doc => ({
+              ...doc,
+              categories: reorderCategory(doc.categories, categoryId, beforeCategoryId),
+            }))
+          },
+          createCategory: (name) => {
+            update(doc => ({
+              ...doc,
+              categories: [...doc.categories, {
+                id: mintCategoryId(doc.categories),
+                name,
+                color: 'brand',
+                pinned: false,
+                collapsed: false,
+                workspaceIds: [],
+              }],
+            }))
+          },
+          renameCategory: (categoryId, name) => {
+            update(doc => ({
+              ...doc,
+              categories: doc.categories.map(category =>
+                (category.id === categoryId ? { ...category, name } : category)),
+            }))
+          },
+          setCategoryColor: (categoryId, color) => {
+            update(doc => ({
+              ...doc,
+              categories: doc.categories.map(category =>
+                (category.id === categoryId ? { ...category, color } : category)),
+            }))
+          },
+          toggleCategoryPinned: (categoryId) => {
+            update(doc => ({
+              ...doc,
+              categories: doc.categories.map(category =>
+                (category.id === categoryId ? { ...category, pinned: !category.pinned } : category)),
+            }))
+          },
+          toggleCategoryCollapsed: (categoryId) => {
+            update(doc => ({
+              ...doc,
+              categories: doc.categories.map(category =>
+                (category.id === categoryId ? { ...category, collapsed: !category.collapsed } : category)),
+            }))
+          },
+          toggleUnassignedCollapsed: () => {
+            update(doc => ({ ...doc, unassignedCollapsed: !doc.unassignedCollapsed }))
+          },
+          deleteCategory: (categoryId) => {
+            update(doc => ({
+              ...doc,
+              categories: doc.categories.filter(category => category.id !== categoryId),
+            }))
+          },
+          setView: (patch) => {
+            update(doc => ({ ...doc, view: { ...doc.view, ...patch } }))
+          },
+          openSession: (sessionId) => { uiWorkspace?.openSession(sessionId) },
+          startSession: (workspaceId) => { uiWorkspace?.startSession(workspaceId) },
+          notifyArchived: () => {
+            contextMenus?.notify('That session is archived. Unarchive it from its menu to open it.')
+          },
+          pickDirectory: async () => (uiWorkspace === undefined ? null : uiWorkspace.pickDirectory()),
+          createWorkspace: async (path) => {
+            if (workspaces !== undefined) await workspaces.create({ path })
+          },
+          renameWorkspace: async (workspaceId, title) => {
+            if (workspaces !== undefined) await workspaces.rename(workspaceId, title)
+          },
+          deleteWorkspace: async (workspaceId) => {
+            if (workspaces !== undefined) await workspaces.delete(workspaceId)
+            update(doc => ({ ...doc, categories: withoutWorkspace(doc.categories, workspaceId) }))
+          },
+        }
+
+        ctx.effect(() => {
+          const element = document.createElement('style')
+          element.setAttribute('data-dsh-workspace-categories', '')
+          element.textContent = STYLES
+          document.head.append(element)
+          return () => { element.remove() }
+        }, 'workspace-categories: stylesheet')
+
+        ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'workspace-categories: dictionaries')
+
+        /* The Host document is loaded once per activation. A local edit made
+           before the read settles wins, so a slow read cannot undo it. */
+        void fetch(DOC_ROUTE, { cache: 'no-store' })
+          .then(response => (response.ok ? response.json() : undefined))
+          .then((value) => {
+            if (disposed || wrote || value === undefined) return
+            store.replace(normalize(value))
+          })
+          .catch(() => {})
+
+        /* A save that failed retries on its own, and the notice clears once a
+           write succeeds. */
+        ctx.effect(() => {
+          const id = window.setInterval(() => {
+            if (saveStore.get() === null) return
+            void flushSave()
+          }, 5000)
+          return () => {
+            window.clearInterval(id)
+            disposed = true
+            window.clearTimeout(saveTimer)
+          }
+        }, 'workspace-categories: save retry')
+
+        ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
+          name: 'sidebar.workspaces',
+          id: 'workspace-categories',
+          priority: SHADOW_PRIORITY,
+          locale: NS,
+          inject: () => ({ actions, docStore: store, saveStore }),
+        }, WorkspaceSkin))
+      },
+    }
+  },
+})

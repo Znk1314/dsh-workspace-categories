@@ -1,0 +1,61 @@
+{
+  "name": "dsh-workspace-categories",
+  "version": "1.0.0",
+  "description": "Group the DSH sidebar's workspaces into coloured, draggable rounded-box categories with long-press reordering and pinning.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Znk1314",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Znk1314/dsh-workspace-categories.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Znk1314/dsh-workspace-categories/issues"
+  },
+  "homepage": "https://github.com/Znk1314/dsh-workspace-categories#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "sidebar",
+    "workspace",
+    "categories",
+    "dsh-bundle"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    },
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-client-ui-context-menu"
+      ]
+    }
+  }
+}

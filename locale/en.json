@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Sidebar workspace categories",
+    "description": "Group the sidebar's workspaces into custom categories. Each category is one rounded box that holds its workspaces and their sessions; press and hold a workspace title to drag it into another category, and press and hold a category header to reorder it. Categories can be renamed, coloured, pinned to the top, folded, or deleted; workspaces you have not filed yet stay in an Unassigned box.",
+    "detail": "docs/DETAIL.md"
+  }
+}

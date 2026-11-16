@@ -1,0 +1,23 @@
+# Normalise to LF in the repository so Windows checkouts do not rewrite whole
+# files, and mark binary assets so Git never diffs them as text.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.woff binary
+*.woff2 binary
+*.mp3 binary
+*.wav binary
+*.mp4 binary
+
+# These are consumed by tooling and must keep their exact bytes.
+*.svg text
+*.json text
+*.yml text
+*.js text
+*.cjs text
+*.mjs text
+*.md text
