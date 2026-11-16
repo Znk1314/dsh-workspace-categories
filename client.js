@@ -1307,6 +1307,9 @@ window.__ModuleLoader__.load({
       const renderSession = (row) => {
         const { summary, archived } = row
         const status = statuses.get(summary.id)
+        /* A running session replaces its timestamp with a spinner, so live work is
+           visible without a separate status column. */
+        const running = !archived && status?.running === true
         const classes = ['wsx-session']
         if (summary.id === currentSessionId) classes.push('wsx-session-selected')
         if (archived) classes.push('wsx-session-archived')
@@ -1346,7 +1349,14 @@ window.__ModuleLoader__.load({
           : h('span', { className: 'wsx-session-flag' }, t('session.awaiting')),
         h('span', { className: 'wsx-session-title' },
           summary.blank ? t('session.new') : summary.displayTitle),
-        h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)))
+        running
+          ? h('span', {
+            className: 'wsx-spinner',
+            role: 'status',
+            'aria-label': t('session.running'),
+            title: t('session.running'),
+          })
+          : h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)))
       }
 
       /**
@@ -1610,22 +1620,27 @@ window.__ModuleLoader__.load({
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  height: 34px;
+  height: 36px;
   padding: 0 2px 0 0;
 }
+/* The title is sized to read level with the 24px trailing controls: a 15px
+   label on a 24px line box centres on the same optical row they do. */
 .wsx-header-title {
+  display: flex;
   flex: 1 1 auto;
+  align-items: center;
   min-width: 0;
+  height: 24px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 500;
   line-height: 24px;
 }
-/* The trailing controls share the title's optical baseline: a fixed 24px row,
-   no extra vertical padding, so all three sit centred on it. */
+/* The trailing controls share the title's optical row: same 24px box, no extra
+   vertical padding, so the label and all three glyphs centre together. */
 .wsx-header-actions { display: inline-flex; flex: 0 0 auto; gap: 2px; align-items: center; height: 24px; }
 .wsx-icon-btn {
   display: inline-flex;
@@ -2182,6 +2197,7 @@ window.__ModuleLoader__.load({
       'box.showMore': '\u663e\u793a\u66f4\u591a\uff08{n}\uff09',
       'session.new': '\u65b0\u4f1a\u8bdd',
       'session.awaiting': '\u5f85\u5904\u7406',
+      'session.running': '\u6b63\u5728\u8fd0\u884c',
       'time.now': '\u521a\u521a',
       'time.minutes': '{n} \u5206\u949f',
       'time.hours': '{n} \u5c0f\u65f6',
@@ -2259,6 +2275,7 @@ window.__ModuleLoader__.load({
       'box.showMore': 'Show more ({n})',
       'session.new': 'New session',
       'session.awaiting': 'Waiting',
+      'session.running': 'Running',
       'time.now': 'now',
       'time.minutes': '{n}min',
       'time.hours': '{n}h',

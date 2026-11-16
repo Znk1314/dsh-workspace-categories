@@ -27,6 +27,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The "Workspaces" section title was 12px inside a 34px row while its three
+  trailing buttons were 24px, so the label never lined up with the glyphs. The
+  title is now 15px on the same 24px box the buttons occupy.
+- A running session showed only its timestamp; it now shows a spinner in place
+  of the timestamp, so live work is visible at a glance. The spinner respects
+  `prefers-reduced-motion`.
 - The category tint covered the whole block (its workspaces and sessions),
   not just the category row. The fill now belongs to the header row alone and
   the children sit on the plain sidebar surface.

@@ -15,6 +15,7 @@ dragging it where you want it.
 - **Rounded tinted category rows** — the category's own row is one rounded rectangle filled with a light tint of its accent, carrying its icon, name, and count; its workspaces and sessions hang below on the plain sidebar surface, joined by an indent guide.
 - **Three filters** — *All* (one flat session list), *Recent* (recently used workspaces), and *Categories* (your groupings). The selected filter is a tinted pill.
 - **Fold by icon** — click a category's icon to collapse the category, or a workspace's folder to collapse just that workspace (closed folder while folded, open folder while shown).
+- **Live status** — a running session shows a spinner where its timestamp normally sits.
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
 - **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
 - **Category ordering and pinning** — drag a category header, or use Move up / Move down; pinned categories always render first.
