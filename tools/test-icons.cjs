@@ -89,7 +89,7 @@ ok('a new category gets an icon', /icon: DEFAULT_GLYPH/.test(client))
 ok('a closed folder shape exists', /const FOLDER_CLOSED = /.test(client))
 ok('an open folder shape exists', /const FOLDER_OPEN = \[/.test(client))
 ok('the workspace fold renders folderOpen when expanded',
-  /folded \? ICON\.folderClosed\(14\) : ICON\.folderOpen\(14\)/.test(client))
+  /folded \? ICON\.folderClosed\(\d+\) : ICON\.folderOpen\(\d+\)/.test(client))
 ok('the workspace fold toggles the fold', /toggleWorkspaceCollapsed/.test(client))
 ok('the category glyph toggles the fold',
   /wsx-cat-glyph[\s\S]{0,200}toggleCategoryCollapsed|toggleCategoryCollapsed\(category\.id\)/.test(client))

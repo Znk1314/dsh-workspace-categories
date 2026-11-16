@@ -51,7 +51,7 @@ const toggle = new Function('update', `
 
 // A query must re-open a folded workspace, mirroring the category behaviour.
 check('fold respects the query override', /const folded = doc\.collapsedWorkspaces\.includes\(key\) && !searching/.test(source), true)
-check('folded workspace hides its rows', /folded\s*\n\s*\? null\s*\n\s*: \[/.test(source), true)
+check('folded workspace hides its rows', /folded\s*\n\s*\? null\s*\n\s*: h\('div', \{ className: 'wsx-guide' \}/.test(source), true)
 // Both the header and the workspace menu offer the fold.
 check('workspace header has a fold button', /className: 'wsx-workspace-fold'/.test(source), true)
 check('workspace menu offers the fold', /id: 'fold',[\s\S]{0,220}toggleWorkspaceCollapsed/.test(source), true)

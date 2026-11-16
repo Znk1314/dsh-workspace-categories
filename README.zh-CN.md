@@ -11,7 +11,8 @@
 
 ## 功能
 
-- **分类即圆角框** —— 把相关的工作区放在一起。
+- **紧凑彩色分类条** —— 每个分类是一条带色条的窄条，含图标、名称和数量；其工作区与会话通过缩进线挂在下面。
+- **三种筛选** —— *全部*（一条平铺会话流）、*最近*（最近使用的工作区）、*分类*（你的分组），上方还有一条*最近使用*的快捷条。
 - **点图标即收起** —— 点分类图标收起整个分类，点工作区文件夹只收起该工作区（收起时是闭合文件夹，展开时是打开的文件夹）。
 - **长按拖动** —— 按住工作区标题片刻，拖进任意分类。
 - **框内自由排序** —— 同一个手势拖动即可改变工作区在框内的位置。
@@ -49,7 +50,9 @@
 | 收起/展开工作区 | 点它的文件夹图标（打开=展开，闭合=收起），或其 **⋯** 菜单 → *收起工作区* |
 | 移出分类 | 拖进「未分类」框，或 **⋯** 菜单 → *移出分类* |
 | 删除分类 | 分类 **⋯** 菜单 → *删除分类*（工作区回到「未分类」，不删会话） |
-| 搜索/筛选/平铺 | 搜索框与右侧滑杆按钮 |
+| 切换视图 | 搜索框下方的 **全部 / 最近 / 分类** 标签 |
+| 快速跳到常用工作区 | 点「最近使用」里的快捷条 |
+| 归档筛选 | 右侧滑杆按钮 |
 
 每个只能拖动的操作都另有菜单入口，键盘和触屏用户也能完成全部操作。
 
@@ -80,14 +83,14 @@
     { "id": "c1", "name": "客户项目", "color": "blue", "icon": "briefcase",
       "pinned": true, "collapsed": false, "workspaceIds": ["w1", "w2"] }
   ],
-  "view": { "mode": "categories", "archived": "default" },
+  "view": { "tab": "categories", "archived": "default" },
   "unassignedCollapsed": false,
   "collapsedWorkspaces": ["w3"]
 }
 ```
 
 `color` 取 `ink | red | orange | amber | green | blue | violet | pink | slate`；
-`view.mode` 取 `categories | flat`；`view.archived` 取 `default | show | only`；
+`view.tab` 取 `categories | recent | all`；`view.archived` 取 `default | show | only`；
 `collapsedWorkspaces` 是已收起的工作区 id 列表；`icon` 取 30 个内置图标之一
 （`folder`、`book`、`graduation`、`briefcase`、`terminal`、`palette`、`brain`、`plant` 等），未知值回退为 `folder`。
 Host 会修复损坏或敌意的输入，坏文件不会让侧边栏打不开。

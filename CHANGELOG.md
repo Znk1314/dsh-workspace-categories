@@ -15,12 +15,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The sidebar is now a dense, flat list. A category is a compact coloured bar
+  (accent strip, glyph, name, count) instead of a bordered box, and its
+  workspaces and sessions hang below on an indent guide, so the hierarchy reads
+  category → workspace → session without nested chrome.
+- Session rows lost their leading status marker; a session title now starts on
+  the same left edge as its workspace title.
+- Added **All / Recent / Categories** filter tabs plus a *Recently used* chip
+  strip for frequent workspaces. `view.mode` became `view.tab`.
+- The Unassigned bucket is demoted to a collapsible footer entry, since it is a
+  catch-all rather than a peer of the user's own categories.
+- Category glyphs render at 18px and category names at 14px.
+
+### Fixed
+
+- A render crash in the rewritten component (`draggingCategoryId` read but
+  never declared) made the slot entry abdicate, silently falling back to the
+  shipped browser. `tools/test-render.cjs` now renders every tab so this class
+  of bug cannot ship again.
+
 - Categories and workspaces are now folded by clicking their icon instead of a
   down chevron. A category shows its chosen glyph; a workspace shows an open
   folder while expanded and a closed folder while folded.
 - Each category carries an icon and one of nine accent colours, picked from a
   new *Icon and colour* dialog that previews the change as you click.
-- The three nesting levels (category glyph, workspace folder, session marker)
+- The three nesting levels (category → workspace → session marker)
   now share one column geometry, so their icons line up on a single vertical
   line and both titles share one left edge.
 

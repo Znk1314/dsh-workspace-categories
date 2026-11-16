@@ -12,7 +12,8 @@ dragging it where you want it.
 
 ## Features
 
-- **Categories as rounded boxes** — group workspaces so related ones sit together.
+- **Compact coloured category bars** — each category is a thin accented bar with its own icon, name, and count; its workspaces and sessions hang below on an indent guide.
+- **Three filters** — *All* (one flat session list), *Recent* (recently used workspaces), and *Categories* (your groupings), with a *Recently used* strip of frequent workspaces above them.
 - **Fold by icon** — click a category's icon to collapse the category, or a workspace's folder to collapse just that workspace (closed folder while folded, open folder while shown).
 - **Long-press drag** — hold a workspace title for a moment and drag it into any category.
 - **Free re-ordering** — drag with the same gesture to change a workspace's position inside a box.
@@ -56,7 +57,9 @@ manifest layout so `dsh plugin add` resolves it.
 | Collapse / expand one workspace | click its folder icon (open folder = expanded, closed = folded), or its **⋯** menu → *Collapse workspace* |
 | Remove a workspace from a category | drag it into *Unassigned*, or its **⋯** menu → *Remove from category* |
 | Delete a category | category **⋯** menu → *Delete category* (its workspaces return to *Unassigned*; no session is deleted) |
-| Search / filter / flat view | the search box and the sliders button at the right |
+| Switch view | the **All / Recent / Categories** tabs under the search box |
+| Jump to a frequent workspace | click a chip in the *Recently used* strip |
+| Archived filter | the sliders button at the right |
 
 Every drag-only action also has a menu path, so a keyboard or touch user can do
 all of it.
@@ -94,14 +97,14 @@ notice clears once a write succeeds.
     { "id": "c1", "name": "Client work", "color": "blue", "icon": "briefcase",
       "pinned": true, "collapsed": false, "workspaceIds": ["w1", "w2"] }
   ],
-  "view": { "mode": "categories", "archived": "default" },
+  "view": { "tab": "categories", "archived": "default" },
   "unassignedCollapsed": false,
   "collapsedWorkspaces": ["w3"]
 }
 ```
 
 `color` accepts `ink | red | orange | amber | green | blue | violet | pink | slate`;
-`view.mode` accepts `categories | flat`; `view.archived` accepts
+`view.tab` accepts `categories | recent | all`; `view.archived` accepts
 `default | show | only`; `collapsedWorkspaces` lists folded workspace ids; `icon` names one of the 30 built-in glyphs
 (`folder`, `book`, `graduation`, `briefcase`, `terminal`, `palette`, `brain`, `plant`, …) and falls back to `folder`.
 The Host repairs malformed or hostile input, so a

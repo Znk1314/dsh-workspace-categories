@@ -1,14 +1,15 @@
-// Prove the three nesting levels share one geometry: a category's glyph, its
-// workspaces' folder icons, and those workspaces' session markers all sit on
-// the same vertical line, and both titles share one left edge.
+// Verify the three-level geometry: a category bar, the workspace rows inside it,
+// and those workspaces' session rows. Sessions now carry no leading marker, so
+// the invariant is that a session title starts on the workspace title column and
+// the indent guide spans exactly the icon gap.
 const fs = require('node:fs')
 
 const css = fs.readFileSync(process.argv[2], 'utf8')
 let failures = 0
 const check = (label, actual, expected) => {
-  if (actual === expected) return
+  if (JSON.stringify(actual) === JSON.stringify(expected)) return
   failures++
-  console.log('FAIL ' + label + ' — got ' + actual + ', expected ' + expected)
+  console.log('FAIL ' + label + '\n  got      ' + actual + '\n  expected ' + expected)
 }
 const ok = (label, condition) => check(label, Boolean(condition), true)
 
@@ -21,71 +22,67 @@ const number = (name) => {
 const pad = number('wsx-row-pad')
 const icon = number('wsx-icon-w')
 const gap = number('wsx-row-gap')
-/* --wsx-icon-col is expressed as row-pad plus a small optical inset. */
 const insetMatch = css.match(/--wsx-icon-col:\s*calc\(var\(--wsx-row-pad\)\s*\+\s*([\d.]+)px\)/)
 if (insetMatch === null) throw new Error('--wsx-icon-col is not row-pad plus an inset')
-const inset = Number(insetMatch[1])
-
-const iconCol = pad + inset
+const iconCol = pad + Number(insetMatch[1])
 const titleCol = iconCol + icon + gap
 
-// The workspace row's folder button is exactly one icon column wide, so the
-// folder's centre sits at iconCol + icon/2.
-const folderCentre = iconCol + icon / 2
-// The session marker cell also starts on iconCol and is one icon column wide.
-const markerCentre = iconCol + icon / 2
-check('session marker centre equals folder centre', markerCentre, folderCentre)
-check('session title starts on the workspace title', iconCol + icon + gap, titleCol)
+// The session row must have no leading marker and start flush inside the guide,
+// so its title lands on the workspace title column.
+const sessionRule = css.match(/\.wsx-session\s*\{([\s\S]*?)\}/)
+if (sessionRule === null) throw new Error('missing .wsx-session rule')
+ok('session row has no left padding of its own', /padding:\s*0 8px 0 0/.test(sessionRule[1]))
+check('no status dot rule exists', /\.wsx-dot\b/.test(css), false)
+check('no session marker rule exists', /\.wsx-session-marker/.test(css), false)
 
-/* Category glyph: the head's padding plus half its button width must equal the
-   folder column, or the three levels visually stagger. */
+// The guide's left margin plus padding must equal the title column, so the
+// guide line sits in the icon slot and the text after it starts on the title.
+const guideRule = css.match(/\.wsx-guide\s*\{([\s\S]*?)\}/)
+if (guideRule === null) throw new Error('missing .wsx-guide rule')
+const marginLeft = /margin-left:\s*var\(--wsx-icon-col\)/.exec(guideRule[1])
+ok('guide starts on the icon column', marginLeft !== null)
+const guidePad = /padding-left:\s*calc\(var\(--wsx-icon-w\)\s*\+\s*var\(--wsx-row-gap\)\s*-\s*([\d.]+)px\)/.exec(guideRule[1])
+ok('guide padding is the icon width plus the gap', guidePad !== null)
+const guideBorder = /border-left:\s*([\d.]+)px solid/.exec(guideRule[1])
+ok('guide draws a left border', guideBorder !== null)
+const sessionTitleStart = iconCol + (icon + gap - Number(guidePad[1])) + Number(guideBorder[1])
+check('session title starts on the workspace title column', sessionTitleStart, titleCol)
+
+// The category bar is compact: a fixed head height and no box padding.
+const barRule = css.match(/\.wsx-bar\s*\{([\s\S]*?)\}/)
+if (barRule === null) throw new Error('missing .wsx-bar rule')
+ok('a category is a bar with an accent strip', /::before/.test(css))
+const stripRule = css.match(/\.wsx-bar::before\s*\{([\s\S]*?)\}/)
+if (stripRule === null) throw new Error('missing .wsx-bar::before rule')
+ok('the strip is a thin vertical bar', /width:\s*3px/.test(stripRule[1]))
+ok('the strip is tinted by the accent', /background:\s*var\(--wsx-accent\)/.test(stripRule[1]))
 const headRule = css.match(/\.wsx-cat-head\s*\{([\s\S]*?)\}/)
 if (headRule === null) throw new Error('missing .wsx-cat-head rule')
-const headPad = /padding:\s*0 2px 0 ([\d.]+)px/.exec(headRule[1])
-ok('category head left padding is declared', headPad !== null)
-const foldRule = css.match(/\.wsx-cat-fold\s*\{([\s\S]*?)\}/)
-if (foldRule === null) throw new Error('missing .wsx-cat-fold rule')
-const foldW = /width:\s*([\d.]+)px/.exec(foldRule[1])
-ok('category glyph button width is declared', foldW !== null)
-const catGlyphCentre = Number(headPad[1]) + Number(foldW[1]) / 2
-/* The category glyph is 16px and the folder glyph is 16px, but the folder sits
-   in a 16px column starting at iconCol while the category glyph's own column is
-   the box padding plus the head padding. Both centres must agree within 1px. */
-const folderCentreInBox = iconCol + icon / 2
-const catGlyphCentreInBox = Number(headPad[1]) + Number(foldW[1]) / 2
-const drift = Math.abs(catGlyphCentreInBox - folderCentreInBox)
-ok('category glyph centre is within 1px of the folder centre (drift ' + drift + 'px)', drift <= 1)
+ok('the bar head is compact (<=36px)', Number(/height:\s*(\d+)px/.exec(headRule[1])?.[1]) <= 36)
+/* The category itself must not carry a box border any more: the accent strip is
+   the only chrome. Scope the check to .wsx-cat's own rule. */
+const catRule = css.match(/\n\.wsx-cat\s*\{([\s\S]*?)\}/)
+if (catRule === null) throw new Error('missing .wsx-cat rule')
+ok('the category has no surrounding box border', !/border:/.test(catRule[1]))
 
-// Structural requirements of the new icon system.
-ok('.wsx-cat-glyph exists', /\.wsx-cat-glyph\s*\{/.test(css))
-ok('.wsx-workspace-fold is the folder button', /\.wsx-workspace-fold\s*\{/.test(css))
-ok('the workspace fold uses the icon column width',
-  /\.wsx-workspace-fold\s*\{[\s\S]*?width:\s*var\(--wsx-icon-w\)/.test(css))
-ok('the session row starts on the icon column',
-  /\.wsx-session\s*\{[\s\S]*?padding:\s*0 8px 0 var\(--wsx-icon-col\)/.test(css))
-ok('the session marker is centred', /\.wsx-session-marker[\s\S]*?justify-content:\s*center/.test(css))
-ok('the empty notice follows the title column',
-  /\.wsx-workspace > \.wsx-cat-empty[\s\S]*?var\(--wsx-title-col\)/.test(css))
+// Category type is larger than before, and its glyph bigger than the folder.
+const catName = css.match(/\.wsx-cat-name\s*\{([\s\S]*?)\}/)
+if (catName === null) throw new Error('missing .wsx-cat-name rule')
+ok('category name is 14px', /font-size:\s*14px/.test(catName[1]))
+ok('category glyph renders at 18px', /glyphById\(category\.icon, 18\)/.test(fs.readFileSync(process.argv[3], 'utf8')))
+ok('the folder icon renders at 15px', /ICON\.folderOpen\(15\)/.test(fs.readFileSync(process.argv[3], 'utf8')))
 
-// Nine tones exist, and each declares both a colour and an accent.
-const tones = ['ink', 'red', 'orange', 'amber', 'green', 'blue', 'violet', 'pink', 'slate']
-for (const tone of tones) {
-  const rule = css.match(new RegExp('\\.wsx-tone-' + tone + '\\s*\\{([\\s\\S]*?)\\}'))
-  ok('.wsx-tone-' + tone + ' exists', rule !== null)
-  if (rule !== null) {
-    ok('.wsx-tone-' + tone + ' declares colour and accent',
-      /color:/.test(rule[1]) && /--wsx-accent:/.test(rule[1]))
-  }
+// Tabs and the recent strip exist and are styled.
+ok('tabs are a segmented control', /\.wsx-tabs[\s\S]*?display:\s*flex/.test(css))
+ok('the selected tab is marked', /\.wsx-tab-on\s*\{/.test(css))
+ok('recent chips exist', /\.wsx-chip\s*\{/.test(css))
+ok('the footer bar is visually demoted', /\.wsx-bar-footer\s*\{[\s\S]*?background:\s*transparent/.test(css))
+
+// Nine tones still exist.
+for (const tone of ['ink', 'red', 'orange', 'amber', 'green', 'blue', 'violet', 'pink', 'slate']) {
+  ok('.wsx-tone-' + tone + ' exists', new RegExp('\\.wsx-tone-' + tone + '\\s*\\{').test(css))
 }
 
-// The appearance picker's grid must be a real grid, not a wrap of buttons.
-ok('glyph picker is a grid', /\.wsx-glyphgrid[\s\S]*?display:\s*grid/.test(css))
-ok('swatches are round', /\.wsx-swatch-fill[\s\S]*?border-radius:\s*50%/.test(css))
-
-// The old down-chevron and the old dot indicator must be gone.
-check('no chevron rule remains', /\.wsx-chevron/.test(css), false)
-check('no category dot rule remains', /\.wsx-cat-dot/.test(css), false)
-
-console.log('columns: icon=' + iconCol + 'px title=' + titleCol + 'px; cat glyph centre=' + catGlyphCentreInBox + 'px, folder centre=' + folderCentreInBox + 'px')
+console.log('columns: icon=' + iconCol + 'px title=' + titleCol + 'px; guide line at ' + iconCol + 'px')
 console.log(failures === 0 ? 'ALL ALIGNMENT CHECKS PASSED' : failures + ' CHECK(S) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

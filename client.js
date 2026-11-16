@@ -43,6 +43,10 @@ window.__ModuleLoader__.load({
     const LONG_PRESS_SLOP_PX = 6
     /** Workspaces rendered per box before "Show more". */
     const BOX_LIMIT = 6
+    /** Workspaces listed in the Recent tab. */
+    const RECENT_LIMIT = 8
+    /** Workspaces in the Recent strip above the tabs. */
+    const RECENT_STRIP_LIMIT = 4
     /** Debounce for writing the document to the Host. */
     const SAVE_DEBOUNCE_MS = 240
     /** Virtual category ids for the two buckets that have no stored category. */
@@ -210,7 +214,7 @@ window.__ModuleLoader__.load({
           workspaceIds: [...(category.workspaceIds ?? [])],
         })),
         view: {
-          mode: view.mode === 'flat' ? 'flat' : 'categories',
+          tab: view.tab === 'recent' || view.tab === 'all' ? view.tab : 'categories',
           archived: view.archived === 'show' || view.archived === 'only' ? view.archived : 'default',
         },
         unassignedCollapsed: source.unassignedCollapsed === true,
@@ -590,20 +594,6 @@ window.__ModuleLoader__.load({
       const days = Math.round(hours / 24)
       if (days < 30) return t('time.days', { n: days })
       return t('time.months', { n: Math.round(days / 30) })
-    }
-
-    /**
-     * Status dot class for one session row.
-     * @param status - the Session UI status, when the roster has reported one.
-     * @param archived - whether the row is archived.
-     * @returns the class name.
-     */
-    function statusDotClass(status, archived) {
-      if (archived) return 'wsx-dot wsx-dot-archived'
-      if (status?.pendingInteraction !== undefined) return 'wsx-dot wsx-dot-warning'
-      if (status?.running === true) return 'wsx-dot wsx-dot-ongoing'
-      if (status?.completionUnread === true) return 'wsx-dot wsx-dot-done'
-      return 'wsx-dot wsx-dot-idle'
     }
 
     /* ------------------------------------------------------------------ */
@@ -1104,6 +1094,216 @@ window.__ModuleLoader__.load({
         return rows
       }
 
+      const appendLine = (categoryId) => {
+        if (dropHint === null || dropHint.append !== true || dropHint.categoryId !== categoryId) return null
+        return h('div', { className: 'wsx-append-line', 'aria-hidden': 'true' })
+      }
+
+      /** The category currently being dragged, so its bar can dim while in flight. */
+      const draggingCategoryId = drag !== null && drag.kind === 'category' ? drag.categoryId : null
+
+      /**
+       * One category as a compact coloured bar: accent strip, glyph, name, count.
+       * Its workspaces hang below on an indent guide, so the hierarchy reads as
+       * category → workspace → session without nested boxes.
+       * @param category - the category to draw.
+       * @returns the category element.
+       */
+      const renderCategoryBox = (category) => {
+        const members = category.workspaceIds.flatMap((id) => {
+          const workspace = byWorkspaceId.get(id)
+          return workspace === undefined ? [] : [workspace]
+        })
+        /* A query opens folded bars so a match is never hidden by a fold. */
+        const folded = category.collapsed && !searching
+        const dropped = dropHint !== null && dropHint.categoryId === category.id
+        const classes = ['wsx-cat', 'wsx-bar', `wsx-tone-${category.color}`]
+        if (draggingCategoryId === category.id) classes.push('wsx-cat-dragging')
+        if (dropped) classes.push('wsx-cat-drop')
+        return h('div', {
+          key: category.id,
+          className: classes.join(' '),
+          'data-wsx-cat': category.id,
+          role: 'treeitem',
+          'aria-level': 1,
+          'aria-expanded': !folded,
+        },
+        h('div', {
+          className: 'wsx-cat-head wsx-grab',
+          onPointerDown: event => beginPress(event, {
+            kind: 'category',
+            categoryId: category.id,
+            disabled: event.target.closest('button') !== null,
+          }),
+        },
+        h('button', {
+          type: 'button',
+          className: 'wsx-cat-fold',
+          'aria-expanded': !folded,
+          'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+          title: folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+          onClick: (event) => {
+            event.stopPropagation()
+            actions.toggleCategoryCollapsed(category.id)
+          },
+        }, h('span', { className: 'wsx-cat-glyph' }, glyphById(category.icon, 18))),
+        h('span', { className: 'wsx-cat-name' }, category.name),
+        category.pinned
+          ? h('span', { className: 'wsx-cat-pin', 'aria-hidden': 'true' }, ICON.pin(12))
+          : null,
+        h('span', { className: 'wsx-cat-badge' }, String(members.length)),
+        h('button', {
+          type: 'button',
+          className: 'wsx-icon-btn',
+          'aria-label': t('menu.categoryActions'),
+          title: t('menu.categoryActions'),
+          onClick: event => openMenuAt(event, categoryMenuItems(category)),
+        }, ICON.dots(14))),
+        folded
+          ? null
+          : h('div', { className: 'wsx-cat-body' },
+            members.length === 0
+              ? h('div', { className: 'wsx-cat-empty' },
+                searching ? t('box.noMatches') : t('box.emptyCategory'))
+              : members.map(workspace =>
+                renderWorkspace(category.id, workspace, rowsOf(workspace.sessionIds), true)),
+            appendLine(category.id)))
+      }
+
+      /**
+       * The unassigned bucket, demoted to a collapsible footer entry: it is a
+       * catch-all, not a peer of the categories the user made.
+       * @returns the footer entry, or null when nothing is unassigned.
+       */
+      const renderUnassigned = () => {
+        if (unassigned.length === 0) return null
+        const folded = doc.unassignedCollapsed && !searching
+        const dropped = dropHint !== null && dropHint.categoryId === UNASSIGNED
+        const classes = ['wsx-cat', 'wsx-bar', 'wsx-bar-footer', 'wsx-tone-slate']
+        if (dropped) classes.push('wsx-cat-drop')
+        return h('div', {
+          key: UNASSIGNED,
+          className: classes.join(' '),
+          'data-wsx-cat': UNASSIGNED,
+          role: 'treeitem',
+          'aria-level': 1,
+          'aria-expanded': !folded,
+        },
+        h('div', { className: 'wsx-cat-head' },
+          h('button', {
+            type: 'button',
+            className: 'wsx-cat-fold',
+            'aria-expanded': !folded,
+            'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+            title: folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
+            onClick: () => { actions.toggleUnassignedCollapsed() },
+          }, h('span', { className: 'wsx-cat-glyph' }, glyphById('list', 18))),
+          h('span', { className: 'wsx-cat-name' }, t('section.unassigned')),
+          h('span', { className: 'wsx-cat-badge' }, String(unassigned.length))),
+        folded
+          ? null
+          : h('div', { className: 'wsx-cat-body' },
+            unassigned.map(workspace =>
+              renderWorkspace(UNASSIGNED, workspace, rowsOf(workspace.sessionIds), true)),
+            appendLine(UNASSIGNED)))
+      }
+
+      const renderOtherSessions = () => {
+        const rows = rowsOf(orphanSessionIds)
+        if (rows.length === 0) return null
+        return h('div', {
+          key: OTHER_SESSIONS,
+          className: 'wsx-cat wsx-bar wsx-bar-footer wsx-tone-slate',
+          'data-wsx-cat': OTHER_SESSIONS,
+          role: 'treeitem',
+          'aria-level': 1,
+        }, h('div', { className: 'wsx-cat-head' },
+          h('span', { className: 'wsx-cat-glyph', 'aria-hidden': 'true' },
+            glyphById('list', 18)),
+          h('span', { className: 'wsx-cat-name' }, t('section.otherSessions')),
+          h('span', { className: 'wsx-cat-badge' }, String(rows.length))),
+        h('div', { className: 'wsx-cat-body' },
+          renderWorkspace(OTHER_SESSIONS, undefined, rows, false)))
+      }
+
+      /** Every session of every workspace plus the orphans, newest first. */
+      const renderAllSessions = () => {
+        const memberships = [...workspaces.map(workspace => workspace.sessionIds), orphanSessionIds]
+        const rows = memberships
+          .flatMap(membership => rowsOf(membership))
+          .sort((left, right) => right.summary.updatedAt - left.summary.updatedAt)
+        if (rows.length === 0) {
+          return h('div', { className: 'wsx-cat-empty' },
+            searching ? t('box.noMatches') : t('box.noSessions'))
+        }
+        return h('div', { className: 'wsx-guide wsx-guide-flat' }, rows.map(row => renderSession(row)))
+      }
+
+      /** The Recent tab: frequent workspaces first, each with its newest rows. */
+      const renderRecent = () => {
+        if (recentWorkspaces.length === 0) {
+          return h('div', { className: 'wsx-cat-empty' }, t('section.noRecent'))
+        }
+        return h('div', { className: 'wsx-recent' },
+          recentWorkspaces.map(workspace =>
+            renderWorkspace('__recent__', workspace, rowsOf(workspace.sessionIds), false)))
+      }
+
+      const addWorkspace = () => {
+        run(async () => {
+          const path = await actions.pickDirectory()
+          if (path === null || path === undefined) return
+          await actions.createWorkspace(path)
+        })
+      }
+
+      const viewMenuItems = () => [
+        ...[
+          ['default', t('view.hideArchived')],
+          ['show', t('view.showArchived')],
+          ['only', t('view.onlyArchived')],
+        ].map(([value, label]) => ({
+          id: `archived-${value}`,
+          label,
+          checked: doc.view.archived === value,
+          run: () => { actions.setView({ archived: value }) },
+        })),
+      ]
+
+      /* ---------------------------------------------------------------- */
+      /* Tabs and the recent list                                          */
+      /* ---------------------------------------------------------------- */
+
+      /**
+       * Most-recently-used workspaces, newest session first. Feeds the Recent
+       * tab, which is how a frequent workspace is reached without hunting
+       * through its category.
+       */
+      const recentWorkspaces = React.useMemo(() => {
+        const newest = new Map()
+        for (const workspace of workspaces) {
+          let best = 0
+          for (const id of workspace.sessionIds) {
+            const summary = list.byId[id]
+            if (summary === undefined) continue
+            if (archivedSet.has(id) && doc.view.archived === 'default') continue
+            if (summary.updatedAt > best) best = summary.updatedAt
+          }
+          if (best > 0) newest.set(workspace.workspaceId, best)
+        }
+        return workspaces
+          .filter(workspace => newest.has(workspace.workspaceId))
+          .sort((left, right) => newest.get(right.workspaceId) - newest.get(left.workspaceId))
+          .slice(0, RECENT_LIMIT)
+      }, [workspaces, list, archivedSet, doc.view.archived])
+
+      const tabs = [
+        ['all', t('tab.all')],
+        ['recent', t('tab.recent')],
+        ['categories', t('tab.categories')],
+      ]
+
+      /** Session rows of one workspace, with the category showing only summaries. */
       const renderSession = (row) => {
         const { summary, archived } = row
         const status = statuses.get(summary.id)
@@ -1141,22 +1341,20 @@ window.__ModuleLoader__.load({
           },
           ...trigger,
         },
-        /* The marker sits in a cell as wide as the folder column, so the dot's
-           centre lands on the folder icon's centre above it. */
-        h('span', { className: 'wsx-session-marker', 'aria-hidden': 'true' },
-          h('span', { className: statusDotClass(status, archived) })),
-        h('span', { className: 'wsx-session-title' },
-          summary.blank ? t('session.new') : summary.displayTitle),
         status?.pendingInteraction === undefined
           ? null
           : h('span', { className: 'wsx-session-flag' }, t('session.awaiting')),
+        h('span', { className: 'wsx-session-title' },
+          summary.blank ? t('session.new') : summary.displayTitle),
         h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)))
       }
 
       /**
-       * One workspace row with its sessions.
+       * One workspace row with its sessions. The workspace title is a tree item;
+       * its sessions hang off an indent guide, so the three levels
+       * (category, workspace, session) read as one hierarchy.
        * @param categoryId - owning box id, or null where a drop is meaningless.
-       * @param workspace - the workspace, or null for the orphan bucket.
+       * @param workspace - the workspace, or undefined for the orphan bucket.
        * @param rows - session rows to render.
        * @param draggable - whether this row can be picked up.
        */
@@ -1166,8 +1364,6 @@ window.__ModuleLoader__.load({
         const limit = searching ? rows.length : (limits[limitKey] ?? BOX_LIMIT)
         const visible = rows.slice(0, limit)
         const hidden = rows.length - visible.length
-        /* A fold hides this workspace's sessions; a query re-opens it so a match
-           is never hidden behind a fold the user forgot about. */
         const folded = doc.collapsedWorkspaces.includes(key) && !searching
         const dragging = drag !== null && drag.kind === 'workspace'
           && drag.workspaceId === key
@@ -1181,6 +1377,9 @@ window.__ModuleLoader__.load({
           key,
           className: classes.join(' '),
           'data-wsx-item': canStart ? key : undefined,
+          role: 'treeitem',
+          'aria-level': 2,
+          'aria-expanded': !folded,
         },
         h('div', {
           className: canStart ? 'wsx-workspace-head wsx-grab' : 'wsx-workspace-head',
@@ -1209,7 +1408,7 @@ window.__ModuleLoader__.load({
             actions.toggleWorkspaceCollapsed(key)
           },
         }, h('span', { className: 'wsx-workspace-icon' },
-          folded ? ICON.folderClosed(14) : ICON.folderOpen(14))),
+          folded ? ICON.folderClosed(15) : ICON.folderOpen(15))),
         h('span', { className: 'wsx-workspace-title' },
           workspace === undefined ? t('section.otherSessions') : workspaceTitle(workspace)),
         h('span', { className: 'wsx-workspace-count' }, String(rows.length)),
@@ -1233,180 +1432,19 @@ window.__ModuleLoader__.load({
           }, ICON.dots(13)))),
         folded
           ? null
-          : [
+          : h('div', { className: 'wsx-guide' },
             visible.length === 0
-              ? h('div', { key: 'empty', className: 'wsx-cat-empty' },
+              ? h('div', { className: 'wsx-cat-empty' },
                 searching ? t('box.noMatches') : t('box.noSessions'))
-              : h('div', { key: 'rows', className: 'wsx-sessions', role: 'group' },
-                visible.map(row => renderSession(row))),
+              : visible.map(row => renderSession(row)),
             hidden > 0
               ? h('button', {
-                key: 'more',
                 type: 'button',
                 className: 'wsx-more',
                 onClick: () => setLimits(current => ({ ...current, [limitKey]: limit + BOX_LIMIT })),
               }, t('box.showMore', { n: hidden }))
-              : null,
-          ])
+              : null))
       }
-
-      const draggingCategoryId = drag !== null && drag.kind === 'category' ? drag.categoryId : null
-
-      /**
-       * The insertion line that marks the append seat of one box. Without it the
-       * only seat with no row under it would give no feedback at all.
-       * @param categoryId - the box being hovered.
-       * @returns the line element, or null when this box is not the append seat.
-       */
-      const appendLine = (categoryId) => {
-        if (dropHint === null || dropHint.append !== true || dropHint.categoryId !== categoryId) return null
-        return h('div', { className: 'wsx-append-line', 'aria-hidden': 'true' })
-      }
-
-      const renderCategoryBox = (category) => {
-        const members = category.workspaceIds.flatMap((id) => {
-          const workspace = byWorkspaceId.get(id)
-          return workspace === undefined ? [] : [workspace]
-        })
-        /* A query opens folded boxes so a match is never hidden by a fold. */
-        const folded = category.collapsed && !searching
-        const dropped = dropHint !== null && dropHint.categoryId === category.id
-        const classes = ['wsx-cat', `wsx-cat-${category.color}`]
-        if (draggingCategoryId === category.id) classes.push('wsx-cat-dragging')
-        if (dropped) classes.push('wsx-cat-drop')
-        return h('div', {
-          key: category.id,
-          className: classes.join(' '),
-          'data-wsx-cat': category.id,
-        },
-        h('div', {
-          className: 'wsx-cat-head wsx-grab',
-          onPointerDown: event => beginPress(event, {
-            kind: 'category',
-            categoryId: category.id,
-            disabled: event.target.closest('button') !== null,
-          }),
-        },
-        h('button', {
-          type: 'button',
-          className: 'wsx-cat-fold',
-          'aria-expanded': !folded,
-          'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
-          title: folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
-          onClick: (event) => {
-            event.stopPropagation()
-            actions.toggleCategoryCollapsed(category.id)
-          },
-        }, h('span', { className: `wsx-cat-glyph wsx-tone-${category.color}` },
-          glyphById(category.icon, 16))),
-        h('span', { className: 'wsx-cat-name' }, category.name),
-        h('span', { className: 'wsx-cat-badge' }, String(members.length)),
-        category.pinned
-          ? h('span', { className: 'wsx-cat-pin', 'aria-hidden': 'true' }, ICON.pin(11))
-          : null,
-        h('button', {
-          type: 'button',
-          className: 'wsx-icon-btn',
-          'aria-label': t('menu.categoryActions'),
-          title: t('menu.categoryActions'),
-          onClick: event => openMenuAt(event, categoryMenuItems(category)),
-        }, ICON.dots(13))),
-        folded
-          ? null
-          : h('div', { className: 'wsx-cat-body' },
-            members.length === 0
-              ? h('div', { className: 'wsx-cat-empty' },
-                searching ? t('box.noMatches') : t('box.emptyCategory'))
-              : members.map(workspace =>
-                renderWorkspace(category.id, workspace, rowsOf(workspace.sessionIds), true)),
-            appendLine(category.id)))
-      }
-
-      const renderUnassigned = () => {
-        if (unassigned.length === 0) return null
-        const folded = doc.unassignedCollapsed && !searching
-        const dropped = dropHint !== null && dropHint.categoryId === UNASSIGNED
-        const classes = ['wsx-cat', 'wsx-cat-slate', 'wsx-cat-unassigned']
-        if (dropped) classes.push('wsx-cat-drop')
-        return h('div', {
-          key: UNASSIGNED,
-          className: classes.join(' '),
-          'data-wsx-cat': UNASSIGNED,
-        },
-        h('div', { className: 'wsx-cat-head' },
-          h('button', {
-            type: 'button',
-            className: 'wsx-cat-fold',
-            'aria-expanded': !folded,
-            'aria-label': folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
-            title: folded ? t('menu.expandCategory') : t('menu.collapseCategory'),
-            onClick: () => { actions.toggleUnassignedCollapsed() },
-          }, h('span', { className: 'wsx-cat-glyph wsx-tone-slate' },
-            glyphById('list', 16))),
-          h('span', { className: 'wsx-cat-name' }, t('section.unassigned')),
-          h('span', { className: 'wsx-cat-badge' }, String(unassigned.length))),
-        folded
-          ? null
-          : h('div', { className: 'wsx-cat-body' },
-            unassigned.map(workspace =>
-              renderWorkspace(UNASSIGNED, workspace, rowsOf(workspace.sessionIds), true)),
-            appendLine(UNASSIGNED)))
-      }
-
-      const renderOtherSessions = () => {
-        const rows = rowsOf(orphanSessionIds)
-        if (rows.length === 0) return null
-        return h('div', {
-          key: OTHER_SESSIONS,
-          className: 'wsx-cat wsx-cat-slate',
-          'data-wsx-cat': OTHER_SESSIONS,
-        }, h('div', { className: 'wsx-cat-head' },
-          h('span', { className: 'wsx-cat-glyph wsx-tone-slate', 'aria-hidden': 'true' },
-            glyphById('list', 16)),
-          h('span', { className: 'wsx-cat-name' }, t('section.otherSessions')),
-          h('span', { className: 'wsx-cat-badge' }, String(rows.length))),
-        h('div', { className: 'wsx-cat-body' },
-          renderWorkspace(OTHER_SESSIONS, undefined, rows, false)))
-      }
-
-      const renderFlat = () => {
-        const memberships = [...workspaces.map(workspace => workspace.sessionIds), orphanSessionIds]
-        const rows = memberships
-          .flatMap(membership => rowsOf(membership))
-          .sort((left, right) => right.summary.updatedAt - left.summary.updatedAt)
-        if (rows.length === 0) {
-          return h('div', { className: 'wsx-cat-empty' },
-            searching ? t('box.noMatches') : t('box.noSessions'))
-        }
-        return rows.map(row => renderSession(row))
-      }
-
-      const addWorkspace = () => {
-        run(async () => {
-          const path = await actions.pickDirectory()
-          if (path === null || path === undefined) return
-          await actions.createWorkspace(path)
-        })
-      }
-
-      const viewMenuItems = () => [
-        {
-          id: 'mode',
-          label: doc.view.mode === 'categories' ? t('view.toFlat') : t('view.toCategories'),
-          run: () => { actions.setView({ mode: doc.view.mode === 'categories' ? 'flat' : 'categories' }) },
-        },
-        { id: 'sep-a', separator: true },
-        ...[
-          ['default', t('view.hideArchived')],
-          ['show', t('view.showArchived')],
-          ['only', t('view.onlyArchived')],
-        ].map(([value, label]) => ({
-          id: `archived-${value}`,
-          label,
-          checked: doc.view.archived === value,
-          run: () => { actions.setView({ archived: value }) },
-        })),
-      ]
 
       /* Rail state: the shell keeps 36px controls and asks for expansion. */
       if (!wide) {
@@ -1430,6 +1468,34 @@ window.__ModuleLoader__.load({
       const loadFailed = workspaceState.state === 'error'
       const notReady = workspaceState.phase !== 'ready'
 
+      /**
+       * The Recent strip above the tabs: a few frequent workspaces one click
+       * away, so a busy project never needs its category expanded first.
+       * @returns the strip, or null when there is nothing to show.
+       */
+      const renderRecentStrip = () => {
+        if (recentWorkspaces.length === 0 || searching) return null
+        return h('div', { className: 'wsx-recent-strip' },
+          h('div', { className: 'wsx-strip-title' }, t('section.recent')),
+          recentWorkspaces.slice(0, RECENT_STRIP_LIMIT).map(workspace => h('button', {
+            key: workspace.workspaceId,
+            type: 'button',
+            className: 'wsx-chip',
+            title: workspaceTitle(workspace),
+            onClick: () => { actions.openWorkspace(workspace.workspaceId) },
+          }, h('span', { className: 'wsx-chip-label' }, workspaceTitle(workspace)))))
+      }
+
+      const tabStrip = h('div', { className: 'wsx-tabs', role: 'tablist', 'aria-label': t('section.workspaces') },
+        tabs.map(([value, label]) => h('button', {
+          key: value,
+          type: 'button',
+          role: 'tab',
+          'aria-selected': doc.view.tab === value,
+          className: doc.view.tab === value ? 'wsx-tab wsx-tab-on' : 'wsx-tab',
+          onClick: () => { actions.setView({ tab: value }) },
+        }, label)))
+
       const bodyContent = loadFailed
         ? h('div', { className: 'wsx-error', role: 'alert' },
           h('div', null, workspaceState.error?.message ?? t('section.loadFailed')),
@@ -1440,17 +1506,17 @@ window.__ModuleLoader__.load({
           }, t('section.retry')))
         : notReady
           ? h('div', { className: 'wsx-loading' }, t('section.loading'))
-          : doc.view.mode === 'flat'
-            ? h('div', { className: 'wsx-cat wsx-cat-flat' },
-              h('div', { className: 'wsx-cat-body' }, renderFlat()))
-            : [
-              ...orderedCategories.map(category => renderCategoryBox(category)),
-              renderUnassigned(),
-              renderOtherSessions(),
-              doc.categories.length === 0 && unassigned.length === 0 && workspaces.length === 0
-                ? h('div', { className: 'wsx-cat-empty' }, t('section.noWorkspaces'))
-                : null,
-            ]
+          : doc.view.tab === 'recent'
+            ? renderRecent()
+            : doc.view.tab === 'all'
+              ? renderAllSessions()
+              : [
+                ...orderedCategories.map(category => renderCategoryBox(category)),
+                renderOtherSessions(),
+                doc.categories.length === 0 && unassigned.length === 0 && workspaces.length === 0
+                  ? h('div', { className: 'wsx-cat-empty' }, t('section.noWorkspaces'))
+                  : null,
+              ]
 
       const draggedLabel = drag === null
         ? ''
@@ -1514,11 +1580,15 @@ window.__ModuleLoader__.load({
           ? null
           : h('div', { className: 'wsx-notice', role: 'status' }, t('section.saveFailed')),
         error === null ? null : h('div', { className: 'wsx-error', role: 'alert' }, error),
+        renderRecentStrip(),
+        tabStrip,
         h('div', {
           className: 'wsx-body',
           role: 'tree',
           'aria-label': t('section.workspaces'),
         }, bodyContent),
+        /* The catch-all bucket belongs at the foot, below the user's categories. */
+        doc.view.tab === 'categories' ? renderUnassigned() : null,
         drag === null
           ? null
           : h(Overlay, null,
@@ -1662,15 +1732,29 @@ window.__ModuleLoader__.load({
 .wsx-cat {
   --wsx-accent: var(--dsw-alias-state-business-primary);
   flex: 0 0 auto;
-  padding: 4px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-alias-bg-layer-1);
-  transition: border-color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+  transition: background-color 120ms ease, opacity 120ms ease;
 }
-.wsx-cat-drop { border-color: var(--wsx-accent); box-shadow: 0 0 0 1px var(--wsx-accent); }
+/* A category is a compact coloured bar, not a box: the accent strip on its left
+   carries the colour, so the list stays dense. */
+.wsx-bar {
+  position: relative;
+  margin: 1px 0;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.wsx-bar::before {
+  content: '';
+  position: absolute;
+  inset: 4px auto 4px 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--wsx-accent);
+}
+.wsx-bar-footer { background: transparent; }
+.wsx-bar-footer::before { background: var(--dsw-alias-border-l2); }
+.wsx-cat-drop { box-shadow: inset 0 0 0 1.5px var(--wsx-accent); }
 .wsx-cat-dragging { opacity: 0.5; }
-/* Accent tones: one class tints the category's glyph and its drop marker. */
+/* Accent tones: one class tints the category's glyph, its strip, and drop markers. */
 .wsx-tone-ink { color: var(--dsw-alias-label-primary); --wsx-accent: var(--dsw-alias-label-primary); }
 .wsx-tone-red { color: var(--dsw-static-red-500); --wsx-accent: var(--dsw-static-red-500); }
 .wsx-tone-orange { color: #f97316; --wsx-accent: #f97316; }
@@ -1683,10 +1767,10 @@ window.__ModuleLoader__.load({
 .wsx-cat-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 2px 0 2px;
-  border-radius: var(--dsw-radius-sm);
+  gap: 7px;
+  height: 34px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--dsw-radius-md);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -1709,7 +1793,7 @@ window.__ModuleLoader__.load({
 }
 .wsx-cat-fold:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .wsx-cat-fold:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-.wsx-cat-glyph { display: inline-flex; align-items: center; justify-content: center; }
+.wsx-cat-glyph { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
 .wsx-cat-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -1717,33 +1801,33 @@ window.__ModuleLoader__.load({
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-primary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 .wsx-cat-badge {
   flex: 0 0 auto;
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
-  font-size: 10px;
-  line-height: 16px;
+  font-size: 11px;
+  line-height: 18px;
   text-align: center;
 }
 .wsx-cat-pin { display: inline-flex; color: var(--wsx-accent); }
-.wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 2px 2px; }
+.wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 1px 0 4px; }
 .wsx-workspace {
-  /* One geometry owner for both nesting levels. The workspace row puts
-     [folder][title] inside a box; a session row then starts its marker on the
-     folder column and its title on the title column, so the status dot sits
-     exactly under the folder icon, and section glyphs above line up too. */
-  --wsx-row-pad: 2px;
+  /* One geometry owner for all three nesting levels. A category bar starts its
+     glyph here, a workspace row puts [folder][title] on these columns, and a
+     session row starts its title on the title column — so the workspace title
+     and its session titles share one left edge. */
+  --wsx-row-pad: 16px;
   --wsx-icon-w: 16px;
-  --wsx-row-gap: 6px;
-  --wsx-icon-col: calc(var(--wsx-row-pad) + 4px);
+  --wsx-row-gap: 8px;
+  --wsx-icon-col: calc(var(--wsx-row-pad) + 6px);
   --wsx-title-col: calc(var(--wsx-icon-col) + var(--wsx-icon-w) + var(--wsx-row-gap));
-  padding: 1px 0;
+  padding: 0;
   border-radius: var(--dsw-radius-md);
 }
 .wsx-workspace-dragging { opacity: 0.45; }
@@ -1754,6 +1838,18 @@ window.__ModuleLoader__.load({
   border-radius: 1px;
   background: var(--wsx-accent);
 }
+/* The indent guide is the visible thread from a category to its sessions. */
+.wsx-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: var(--wsx-icon-col);
+  padding-left: calc(var(--wsx-icon-w) + var(--wsx-row-gap) - 1px);
+  border-left: 1px solid var(--dsw-alias-border-l2);
+  /* Pull the guide back up under the workspace row it belongs to. */
+  margin-top: -1px;
+}
+.wsx-guide-flat { margin-left: 8px; padding-left: 8px; }
 .wsx-workspace-head {
   display: flex;
   align-items: center;
@@ -1812,9 +1908,11 @@ window.__ModuleLoader__.load({
   display: flex;
   align-items: center;
   gap: var(--wsx-row-gap);
-  height: 32px;
-  padding: 0 8px 0 var(--wsx-icon-col);
-  border-radius: var(--dsw-radius-md);
+  height: 30px;
+  /* No leading marker: the title starts on the workspace title's column, so the
+     two read as one left-aligned stack inside the indent guide. */
+  padding: 0 8px 0 0;
+  border-radius: var(--dsw-radius-sm);
   cursor: pointer;
   outline: none;
   -webkit-user-select: none;
@@ -1835,21 +1933,8 @@ window.__ModuleLoader__.load({
 }
 .wsx-session-flag { flex: 0 0 auto; color: var(--dsw-alias-state-warn-primary); font-size: 11px; }
 .wsx-session-time { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
-.wsx-session-marker {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: var(--wsx-icon-w);
-}
-.wsx-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; }
-.wsx-dot-idle { background: var(--dsw-alias-state-idle-primary); }
-.wsx-dot-ongoing { background: var(--dsw-alias-state-business-primary); }
-.wsx-dot-warning { background: var(--dsw-alias-state-warn-primary); }
-.wsx-dot-done { background: var(--dsw-alias-state-success-primary); }
-.wsx-dot-archived { background: var(--dsw-alias-state-idle-primary); opacity: 0.4; }
 .wsx-more {
-  margin: 1px 0 2px var(--wsx-title-col);
+  margin: 1px 0 2px;
   padding: 2px 0;
   border: 0;
   background: transparent;
@@ -1860,6 +1945,58 @@ window.__ModuleLoader__.load({
   cursor: pointer;
 }
 .wsx-more:hover { color: var(--dsw-alias-label-primary); }
+/* Filter tabs: the three ways into the workspace list. */
+.wsx-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 2px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.wsx-tab {
+  flex: 1 1 auto;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: calc(var(--dsw-radius-md) - 2px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wsx-tab:hover { color: var(--dsw-alias-label-primary); }
+.wsx-tab-on {
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+.wsx-tab:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+/* The recent strip keeps a few frequent workspaces one click away. */
+.wsx-recent-strip { display: flex; flex-wrap: wrap; flex: 0 0 auto; gap: 4px; margin: 0 0 6px; }
+.wsx-strip-title {
+  flex: 0 0 100%;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+.wsx-chip {
+  max-width: 100%;
+  height: 24px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wsx-chip:hover { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l2); }
+.wsx-chip-label { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsx-recent { display: flex; flex-direction: column; gap: 4px; }
 .wsx-rail { align-items: center; gap: 2px; padding-top: 6px; }
 .wsx-rail-btn {
   display: inline-flex;
@@ -2040,6 +2177,11 @@ window.__ModuleLoader__.load({
       'section.workspaces': '\u5de5\u4f5c\u533a',
       'section.unassigned': '\u672a\u5206\u7c7b',
       'section.otherSessions': '\u5176\u4ed6\u4f1a\u8bdd',
+      'section.recent': '\u6700\u8fd1\u4f7f\u7528',
+      'section.noRecent': '\u8fd8\u6ca1\u6709\u6700\u8fd1\u4f7f\u7528\u7684\u5de5\u4f5c\u533a\u3002',
+      'tab.all': '\u5168\u90e8',
+      'tab.recent': '\u6700\u8fd1',
+      'tab.categories': '\u5206\u7c7b',
       'section.loading': '\u6b63\u5728\u8f7d\u5165\u5de5\u4f5c\u533a\u2026',
       'section.loadFailed': '\u5de5\u4f5c\u533a\u5217\u8868\u52a0\u8f7d\u5931\u8d25\u3002',
       'section.retry': '\u91cd\u65b0\u52a0\u8f7d\u9875\u9762',
@@ -2050,8 +2192,6 @@ window.__ModuleLoader__.load({
       'actions.newCategory': '\u65b0\u5efa\u5206\u7c7b',
       'actions.addWorkspace': '\u6dfb\u52a0\u5de5\u4f5c\u533a',
       'actions.viewOptions': '\u89c6\u56fe\u9009\u9879',
-      'view.toCategories': '\u6539\u4e3a\u6309\u5206\u7c7b\u663e\u793a',
-      'view.toFlat': '\u6539\u4e3a\u5e73\u94fa\u663e\u793a',
       'view.hideArchived': '\u9690\u85cf\u5df2\u5f52\u6863',
       'view.showArchived': '\u663e\u793a\u5df2\u5f52\u6863',
       'view.onlyArchived': '\u53ea\u770b\u5df2\u5f52\u6863',
@@ -2115,6 +2255,11 @@ window.__ModuleLoader__.load({
       'section.workspaces': 'Workspaces',
       'section.unassigned': 'Unassigned',
       'section.otherSessions': 'Other sessions',
+      'section.recent': 'Recently used',
+      'section.noRecent': 'No recently used workspaces yet.',
+      'tab.all': 'All',
+      'tab.recent': 'Recent',
+      'tab.categories': 'Categories',
       'section.loading': 'Loading workspaces…',
       'section.loadFailed': 'Could not load the workspace list.',
       'section.retry': 'Reload the page',
@@ -2125,8 +2270,6 @@ window.__ModuleLoader__.load({
       'actions.newCategory': 'New category',
       'actions.addWorkspace': 'Add workspace',
       'actions.viewOptions': 'View options',
-      'view.toCategories': 'Group by category',
-      'view.toFlat': 'One flat list',
       'view.hideArchived': 'Hide archived',
       'view.showArchived': 'Show archived',
       'view.onlyArchived': 'Only archived',
@@ -2346,6 +2489,15 @@ window.__ModuleLoader__.load({
             update(doc => ({ ...doc, view: { ...doc.view, ...patch } }))
           },
           openSession: (sessionId) => { uiWorkspace?.openSession(sessionId) },
+          /** Open a workspace by resuming its newest session, as the shipped browser does. */
+          openWorkspace: (workspaceId) => {
+            const workspace = workspaces === undefined
+              ? undefined
+              : workspaces.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
+            const newest = workspace === undefined ? undefined : workspace.sessionIds[0]
+            if (newest !== undefined) uiWorkspace?.openSession(newest)
+            else uiWorkspace?.startSession(workspaceId)
+          },
           startSession: (workspaceId) => { uiWorkspace?.startSession(workspaceId) },
           notifyArchived: () => {
             contextMenus?.notify('That session is archived. Unarchive it from its menu to open it.')
