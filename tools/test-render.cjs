@@ -15,8 +15,23 @@ const ok = (label, condition, detail) => {
 
 // --- capture the plugin factory --------------------------------------------
 let captured = null
+/* Faithful enough to model what the component relies on: children must land on
+   props.children (a boundary reads them there), and Component must exist so the
+   module-level class expression is not what fails. */
+class StubComponent {
+  constructor(props) {
+    this.props = props
+    this.state = {}
+  }
+}
 const React = {
-  createElement: (type, props, ...kids) => ({ type, props, kids }),
+  Component: StubComponent,
+  createElement: (type, props, ...kids) => {
+    const merged = { ...(props || {}) }
+    if (kids.length === 1) merged.children = kids[0]
+    else if (kids.length > 1) merged.children = kids
+    return { type, props: merged, kids }
+  },
   useState: value => [value, () => {}],
   useRef: () => ({ current: null }),
   useEffect: () => {},
@@ -84,10 +99,10 @@ if (entry === null) {
   console.log(failures + ' CHECK(S) FAILED')
   process.exit(1)
 }
-/* The browser-half facade allocates the shadowing priority itself and overwrites
-   whatever a package passes, so a package-supplied value is dead weight and a
-   false promise. Assert we do not pass one. */
-ok('the entry does not pass a priority', entry.options.priority === undefined)
+/* The live slot ledger reports this exact value back, which proves the
+   registration path applies it rather than overwriting it. Dropping it once lost
+   the election and the built-in browser took the sidebar. */
+ok('the entry wins the slot with a negative priority', entry.options.priority < 0)
 ok('the entry seats into the browsing region', entry.options.name === 'sidebar.workspaces')
 
 // --- render each tab with realistic state ----------------------------------
@@ -262,7 +277,35 @@ const bareTree = entry.component(propsFor('categories'))
 ok('empty seats render no wrapper',
   count(bareTree, c => c.split(' ').includes('wsx-session-leading')) === 0)
 
+/* A seated extension must be wrapped in a containment boundary: its failure
+   happens during React's render, where a try/catch around renderSlot cannot
+   reach it, and a throw there hands the sidebar back to the built-in browser. */
+const seatedTree = entry.component(propsFor('categories', {
+  renderSlot: () => ({ type: 'span', props: { className: 'ext-entry' }, kids: [] }),
+}))
+let boundaryCount = 0
+const findBoundary = (node) => {
+  if (node === null || typeof node !== 'object') return
+  if (Array.isArray(node)) { node.forEach(findBoundary); return }
+  if (typeof node.type === 'function') boundaryCount++
+  if (Array.isArray(node.kids)) node.kids.forEach(findBoundary)
+}
+findBoundary(seatedTree)
+ok('a seated extension is wrapped in a boundary (' + boundaryCount + ')', boundaryCount > 0)
+ok('the seated content still renders',
+  count(seatedTree, c => c.split(' ').includes('ext-entry')) > 0)
+
 // --- the states that must not crash ---------------------------------------
+/* A dynamic browser half may receive no slot renderer at all. The row must still
+   render, minus the seats. */
+try {
+  const tree = entry.component(propsFor('categories', { rest: { renderSlot: undefined } }))
+  ok('a missing renderSlot does not break the row', tree !== null)
+} catch (error) {
+  failures++
+  console.log('FAIL a missing renderSlot broke the render: ' + error.message)
+}
+
 const emptyProps = propsFor('categories', {
   workspaces: { items: [], archivedSessionIds: [], pinnedSessionIds: [], phase: 'ready', state: 'idle' },
 })

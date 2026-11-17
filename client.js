@@ -31,6 +31,40 @@ window.__ModuleLoader__.load({
     const ReactDOM = require('react-dom')
     const h = React.createElement
 
+    /**
+     * Contains one seated extension's render failure.
+     *
+     * `renderSlot` runs during our render, so a try/catch around the call covers
+     * only the call itself. The seated component actually renders later, inside
+     * React's reconciliation, and a throw there propagates straight up through
+     * this component — which makes the whole slot entry abdicate and hands the
+     * sidebar back to the built-in browser. A boundary is the only construct that
+     * stops that.
+     *
+     * Built behind a guard on purpose: a class expression evaluated at module
+     * scope throws if the seeded React lacks `Component`, and a throw there takes
+     * the entire plugin down before it can render anything. Without the boundary
+     * the seats are simply rendered unwrapped.
+     */
+    const SeatBoundary = typeof React.Component === 'function'
+      ? class SeatBoundary extends React.Component {
+        constructor(props) {
+          super(props)
+          this.state = { failed: false }
+        }
+
+        static getDerivedStateFromError() {
+          return { failed: true }
+        }
+
+        render() {
+          /* Nothing to say: an extension's failure is not this package's to
+             report, and the row simply renders without that seat. */
+          return this.state.failed ? null : this.props.children
+        }
+      }
+      : null
+
     /** Locale namespace owned by this plugin. */
     const NS = 'workspaceSkin'
     /** Host route serving the category document (see index.js). */
@@ -45,6 +79,12 @@ window.__ModuleLoader__.load({
       trailing: 'sidebar.session.row.trailing',
       action: 'sidebar.workspaces.session.row.action',
     })
+    /**
+     * Lower than the shipped browser's implicit 0, so this entry wins the slot.
+     * Keep it: the live slot ledger reports this exact value back, so it is
+     * applied on this registration path rather than overwritten.
+     */
+    const SHADOW_PRIORITY = -1000
     /** How long a press holds before a drag starts. */
     const LONG_PRESS_MS = 180
     /** Movement that cancels the pending long press (a scroll or a click). */
@@ -637,18 +677,20 @@ window.__ModuleLoader__.load({
        */
       const childSlot = (key, slotProps) => {
         if (typeof renderSlot !== 'function') return null
+        let rendered
         try {
-          const rendered = renderSlot(key, slotProps)
-          /* An empty array means nobody is seated; emitting a wrapper would add
-             dead flex items to every row. */
-          if (rendered === null || rendered === undefined) return null
-          if (Array.isArray(rendered) && rendered.length === 0) return null
-          return rendered
+          rendered = renderSlot(key, slotProps)
         } catch {
-          /* A seat that is not declared in this build must not take the sidebar
-             down; the row simply renders without it. */
+          /* The call itself failed (undeclared seat, bad props): skip it. */
           return null
         }
+        /* An empty array means nobody is seated; emitting a wrapper would add
+           dead flex items to every row. */
+        if (rendered === null || rendered === undefined) return null
+        if (Array.isArray(rendered) && rendered.length === 0) return null
+        /* No boundary available (older React seed): render the seat unwrapped
+           rather than refusing to show it. */
+        return SeatBoundary === null ? rendered : h(SeatBoundary, { key }, rendered)
       }
 
       const [query, setQuery] = React.useState('')
@@ -2690,9 +2732,13 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
           name: 'sidebar.workspaces',
           id: 'workspace-categories',
-          /* No `priority`: the browser-half facade allocates one for every
-             non-chain slot and overwrites whatever a package passes, so a value
-             here would be dead weight that invites false assumptions. */
+          /*
+           * Explicit and lower than the shipped browser's implicit 0. The live
+           * slot ledger reads this value back verbatim, which proves it is applied
+           * here rather than overwritten — dropping it once lost the slot
+           * election and the built-in browser took over.
+           */
+          priority: SHADOW_PRIORITY,
           locale: NS,
           inject: () => ({ actions, docStore: store, saveStore }),
         }, WorkspaceSkin))

@@ -27,6 +27,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Reverted the priority removal from the previous commit. It took the plugin
+  off the sidebar.** I had read DSH's `guard.ts` and concluded the facade
+  overwrites any package-supplied `priority`, then removed ours. The live slot
+  ledger reports `-1000` back verbatim, which proves that code path is not the
+  one this package registers through: the literal value is applied. With no
+  explicit priority the entry no longer undercut the shipped browser's implicit
+  0, the built-in browser took the seat, and the sidebar looked uninstalled.
+- A seated extension's failure is now contained by a React error boundary.
+  `renderSlot` returns a node that renders later, inside reconciliation, so the
+  try/catch around the call could not reach a throw inside the extension — and
+  such a throw propagates up through this component, abdicating the slot exactly
+  like the priority bug. The boundary is also built behind a `typeof
+  React.Component` guard, because a class expression at module scope throws if
+  the seeded React lacks it, which would take the plugin down before first render.
+
 - **Compatibility:** this package replaces the whole browsing region, which
   silently evicted every extension seated inside a session row. It now forwards
   `sidebar.session.row.leading`, `sidebar.session.row.trailing` and

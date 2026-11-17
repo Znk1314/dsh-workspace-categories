@@ -166,10 +166,10 @@ Exactly one of them renders; the others do nothing, and **nothing reports the
 conflict**. If the sidebar does not look the way you expect, disable one of the
 two and reload.
 
-Which one wins is decided by **registration order, not by anything a plugin
-declares**. DSH's browser-half facade allocates each slot's shadowing priority
-itself and overwrites any `priority` a package passes, so no plugin can claim
-precedence. Load order is not a contract you can rely on in either direction.
+This plugin registers at a **negative** shadowing priority, below the shipped
+browser's implicit 0, which is what makes it win the seat. If you fork it and
+remove that value, the shipped browser takes the sidebar back — the plugin then
+looks uninstalled even though it is loaded.
 
 ### Extensions that seat inside a session row still work
 
