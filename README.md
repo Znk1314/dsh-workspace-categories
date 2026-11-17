@@ -2,15 +2,39 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Group the **DeepSeek Harness** desktop sidebar's workspaces into custom
-categories. A category is a compact tinted row that holds its own workspaces and
-their sessions, and you file things by pressing and holding a title and dragging
-it where you want it.
+> **Tired of a workspace list that has grown out of control?**
+> **Tired of scrolling for ages every single time you need to find a session?**
 
+This plugin fixes both. File your workspaces into custom categories, then reach
+any session without hunting: **All / Recent / Categories** tabs, a fold on every
+level, and long-press drag to move things where they belong.
+
+It exists because this was a real pain point — and it is almost certainly the
+same pain point for most DSH users.
+
+[![tests](https://github.com/Znk1314/dsh-workspace-categories/actions/workflows/tests.yml/badge.svg)](https://github.com/Znk1314/dsh-workspace-categories/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.0--rc.2-4a90d9)
 
 ![The DSH sidebar with the plugin active: tinted category rows, workspaces and sessions nested under indent guides, and the All / Recent / Categories tabs](docs/preview.png)
+
+## Why not just use the built-in list?
+
+The built-in sidebar is one flat list of workspaces. That is fine at five
+workspaces and unusable at fifty: every workspace expands all of its sessions
+inline, so the list grows without bound and finding anything means scrolling.
+
+This plugin keeps the same data but changes how you reach it:
+
+| | Built-in | This plugin |
+|---|---|---|
+| Grouping | none — one flat list | your own categories, pinned and re-ordered |
+| Finding a session | scroll the whole list | **All** (flat session list), **Recent** (recently used), or fold to a category |
+| Visual weight | every workspace expanded | fold any category *or* any workspace |
+| Long lists | scroll past everything | sessions are nested under their workspace, one indent guide deep |
+
+Nothing is removed: search, archived filtering, add/rename/delete workspace, and
+the full right-click session menu all still work.
 
 ## Requirements
 

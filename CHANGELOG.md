@@ -124,6 +124,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`npm test`** runs all eight suites in one command (`tools/run-all.mjs`),
+  and `.github/workflows/tests.yml` runs the same thing on Node 22 and 24 for
+  every push and pull request. The README carries the badge.
+
 - Sidebar workspace categories: each category is a rounded box holding an
   ordered set of workspaces and their sessions.
 - Long-press drag (180 ms) to move a workspace into another category and to

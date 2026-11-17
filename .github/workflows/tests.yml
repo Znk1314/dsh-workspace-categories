@@ -1,0 +1,35 @@
+name: tests
+
+# Runs the same suite a contributor runs locally (`npm test`). There is no build
+# step and no install step: the plugin is plain JavaScript with no dependencies,
+# so the only thing this workflow can prove is that every check still passes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The plugin's engines allow both lines; testing the floor and the
+        # current release catches an accidental newer-syntax dependency.
+        node: ['22', '24']
+    name: node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # No `npm ci`: package.json declares no dependencies and there is no
+      # lockfile to install from.
+      - name: Run every suite
+        run: node tools/run-all.mjs

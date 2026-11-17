@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Group the DSH sidebar's workspaces into coloured, draggable rounded-box categories with long-press reordering and pinning.",
   "type": "module",
+  "scripts": {
+    "test": "node tools/run-all.mjs"
+  },
   "license": "MIT",
   "author": "Znk1314",
   "repository": {
@@ -35,7 +38,7 @@
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",
-    "docs",
+    "docs/preview.png",
     "icon.svg",
     "README.md",
     "README.zh-CN.md",
@@ -48,7 +51,9 @@
     "engines": {
       "dsh": ">=0.2.0-rc.2"
     },
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [

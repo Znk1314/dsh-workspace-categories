@@ -39,7 +39,18 @@ small Host half, so the loop is short.
 
 ## Running the checks
 
-The harness needs a Node-compatible executable. Any of these work:
+One command runs everything:
+
+```sh
+npm test          # or: node tools/run-all.mjs
+```
+
+That is also exactly what CI runs on Node 22 and 24, so a green local run means a
+green pull request. It needs only Node — no install step, because this package
+declares no dependencies.
+
+Individual suites are listed below; each takes the source file as its argument and
+exits non-zero on failure.
 
 ```sh
 # a normal Node install
