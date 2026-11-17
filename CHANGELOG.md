@@ -124,6 +124,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A **＋** on each category row: it opens the directory picker and files the new
+  workspace into that category in one step, instead of creating it and then
+  dragging it in. The button only appears on hover (always visible on touch), so
+  a quiet sidebar keeps just the count.
+- The Chinese README is now one file, `README.zh.md`. It used to be duplicated as
+  `README.zh-CN.md` plus a thin entry, and two copies of a translation is exactly
+  how they drift apart. `README.zh.md` is also the name the DSH plugin market
+  reads, so one file now serves both purposes; every reference was repointed.
+
 - **`README.zh.md`**, because the DSH plugin market reads its Chinese card
   intro from that exact filename. The repository only had `README.zh-CN.md`,
   which the market never fetches, so the card would have shown no Chinese

@@ -1226,6 +1226,18 @@ window.__ModuleLoader__.load({
           ? h('span', { className: 'wsx-cat-pin', 'aria-hidden': 'true' }, ICON.pin(12))
           : null,
         h('span', { className: 'wsx-cat-badge' }, String(members.length)),
+        /* Creates a workspace straight into this category, so filing is part of
+           creating rather than a second drag afterwards. */
+        h('button', {
+          type: 'button',
+          className: 'wsx-icon-btn wsx-cat-add',
+          'aria-label': t('menu.addWorkspaceToCategory'),
+          title: t('menu.addWorkspaceToCategory'),
+          onClick: (event) => {
+            event.stopPropagation()
+            addWorkspaceToCategory(category.id)
+          },
+        }, ICON.plus(14)),
         h('button', {
           type: 'button',
           className: 'wsx-icon-btn',
@@ -1328,6 +1340,38 @@ window.__ModuleLoader__.load({
           const path = await actions.pickDirectory()
           if (path === null || path === undefined) return
           await actions.createWorkspace(path)
+        })
+      }
+
+      /**
+       * Create a workspace and file it into one category in a single gesture.
+       *
+       * The new workspace's id is not always returned by the create call, so when
+       * it is missing the workspace is located by its directory path. Without that
+       * fallback the workspace would be created but land in Unassigned, which is
+       * exactly the manual step this button exists to remove.
+       * @param categoryId - category to file the new workspace into.
+       */
+      const addWorkspaceToCategory = (categoryId) => {
+        run(async () => {
+          const path = await actions.pickDirectory()
+          if (path === null || path === undefined) return
+          const createdId = await actions.createWorkspace(path)
+          if (typeof createdId === 'string' && createdId !== '') {
+            actions.moveWorkspaceIntoCategory(createdId, categoryId)
+            return
+          }
+          /* Fallback: compare the picked directory against the workspace list. */
+          const normalized = String(path).replace(/[\\/]+$/, '').toLowerCase()
+          const match = workspaceState.items.find((workspace) => {
+            const own = String(workspace.path ?? '').replace(/[\\/]+$/, '').toLowerCase()
+            return own === normalized
+          })
+          if (match !== undefined) {
+            actions.moveWorkspaceIntoCategory(match.workspaceId, categoryId)
+            return
+          }
+          setError(t('box.createdButUnfiled'))
         })
       }
 
@@ -1967,6 +2011,15 @@ window.__ModuleLoader__.load({
   text-align: center;
 }
 .wsx-cat-pin { display: inline-flex; color: var(--wsx-accent); }
+/* The add button stays out of the way until the row is hovered or focused, so a
+   quiet sidebar keeps its count and only reveals the action on intent. It is
+   always present for touch, which has no hover. */
+.wsx-cat-add { display: none; }
+.wsx-cat-head:hover .wsx-cat-add,
+.wsx-cat-head:focus-within .wsx-cat-add { display: inline-flex; }
+@media (hover: none) {
+  .wsx-cat-add { display: inline-flex; }
+}
 .wsx-cat-body { display: flex; flex-direction: column; gap: 1px; padding: 1px 0 4px; }
 .wsx-workspace {
   /* Single geometry owner. A workspace row is [pad][folder 16][gap][title]; its
@@ -2387,6 +2440,7 @@ window.__ModuleLoader__.load({
       'box.noSessions': '\u8fd8\u6ca1\u6709\u4f1a\u8bdd',
       'box.noMatches': '\u6ca1\u6709\u5339\u914d\u7684\u4f1a\u8bdd',
       'box.showMore': '\u663e\u793a\u66f4\u591a\uff08{n}\uff09',
+      'box.createdButUnfiled': '\u5de5\u4f5c\u533a\u5df2\u521b\u5efa\uff0c\u4f46\u672a\u80fd\u81ea\u52a8\u5f52\u5165\u5206\u7c7b\uff0c\u8bf7\u624b\u52a8\u62d6\u5165\u3002',
       'session.new': '\u65b0\u4f1a\u8bdd',
       'session.awaiting': '\u5f85\u5904\u7406',
       'session.running': '\u6b63\u5728\u8fd0\u884c',
@@ -2415,6 +2469,7 @@ window.__ModuleLoader__.load({
       'menu.moveUp': '\u4e0a\u79fb\u5206\u7c7b',
       'menu.moveDown': '\u4e0b\u79fb\u5206\u7c7b',
       'menu.categoryActions': '\u5206\u7c7b\u64cd\u4f5c',
+      'menu.addWorkspaceToCategory': '\u5728\u6b64\u5206\u7c7b\u65b0\u5efa\u5de5\u4f5c\u533a',
       'menu.workspaceActions': '\u5de5\u4f5c\u533a\u64cd\u4f5c',
       'menu.newSession': '\u65b0\u5efa\u4f1a\u8bdd',
       'menu.moveToCategory': '\u79fb\u5230\u5206\u7c7b',
@@ -2465,6 +2520,7 @@ window.__ModuleLoader__.load({
       'box.noSessions': 'No sessions yet',
       'box.noMatches': 'No matching sessions',
       'box.showMore': 'Show more ({n})',
+      'box.createdButUnfiled': 'Workspace created, but it could not be filed automatically. Drag it in.',
       'session.new': 'New session',
       'session.awaiting': 'Waiting',
       'session.running': 'Running',
@@ -2493,6 +2549,7 @@ window.__ModuleLoader__.load({
       'menu.moveUp': 'Move category up',
       'menu.moveDown': 'Move category down',
       'menu.categoryActions': 'Category actions',
+      'menu.addWorkspaceToCategory': 'New workspace in this category',
       'menu.workspaceActions': 'Workspace actions',
       'menu.newSession': 'New session',
       'menu.moveToCategory': 'Move to category',
@@ -2599,6 +2656,13 @@ window.__ModuleLoader__.load({
                 : assignWorkspace(doc.categories, workspaceId, categoryId, beforeId),
             }))
           },
+          /** File one workspace into a category without naming an anchor row. */
+          moveWorkspaceIntoCategory: (workspaceId, categoryId) => {
+            update(doc => ({
+              ...doc,
+              categories: assignWorkspace(doc.categories, workspaceId, categoryId, undefined),
+            }))
+          },
           unassignWorkspace: (workspaceId) => {
             update(doc => ({ ...doc, categories: withoutWorkspace(doc.categories, workspaceId) }))
           },
@@ -2683,8 +2747,19 @@ window.__ModuleLoader__.load({
             contextMenus?.notify('That session is archived. Unarchive it from its menu to open it.')
           },
           pickDirectory: async () => (uiWorkspace === undefined ? null : uiWorkspace.pickDirectory()),
+          /**
+           * Create a workspace and hand back its id.
+           * @param path - directory to open as a workspace.
+           * @returns the new workspace's id, or null when the platform declined.
+           */
           createWorkspace: async (path) => {
-            if (workspaces !== undefined) await workspaces.create({ path })
+            if (workspaces === undefined) return null
+            const created = await workspaces.create({ path })
+            /* The Client service resolves to the workspace view; older builds
+               may return nothing, in which case the caller falls back to a
+               title match. */
+            const id = created?.workspaceId ?? created?.id
+            return typeof id === 'string' && id !== '' ? id : null
           },
           renameWorkspace: async (workspaceId, title) => {
             if (workspaces !== undefined) await workspaces.rename(workspaceId, title)

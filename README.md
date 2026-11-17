@@ -1,6 +1,6 @@
 # dsh-workspace-categories
 
-**English** · [简体中文](README.zh-CN.md)
+**English** · [简体中文](README.zh.md)
 
 > **Tired of a workspace list that has grown out of control?**
 > **Tired of scrolling for ages every single time you need to find a session?**
@@ -101,6 +101,7 @@ plugin.
 | Action | How |
 |---|---|
 | Create a category | the **＋** beside the sidebar's *Workspaces* title |
+| New workspace directly in a category | hover the category row and click its **＋** — the workspace is created and filed in one step |
 | File a workspace | **press and hold** its title, then drag into a box — or use its **⋯** menu → *Move to category* |
 | Re-order inside a box | press and hold, then drop on the upper/lower half of another workspace row; the box tail shows an insertion line |
 | Re-order categories | press and hold a category header, or its **⋯** menu → *Move up* / *Move down* |

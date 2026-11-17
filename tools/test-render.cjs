@@ -217,6 +217,9 @@ for (const tab of tabs) {
     ok('categories tab draws session rows', rows > 0)
     ok('categories tab draws an indent guide per workspace', guides >= 2)
     ok('no status dots are rendered', count(tree, c => c.includes('wsx-dot')) === 0)
+    /* The category row offers a one-gesture "new workspace here" button. */
+    ok('the category row has an add button',
+      count(tree, c => c.split(' ').includes('wsx-cat-add')) === 2)
   }
   if (tab === 'recent') {
     /* Recent lists workspaces directly, without category bars. */
