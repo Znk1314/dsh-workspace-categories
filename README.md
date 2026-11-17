@@ -152,6 +152,53 @@ damaged file never takes the sidebar down.
 - All colours and surfaces come from theme tokens (`--dsw-alias-*`,
   `--dsw-radius-*`), so light and dark themes both work.
 
+## Compatibility with other sidebar plugins
+
+DSH's sidebar browsing region (`sidebar.workspaces`) is a **single** slot: only
+one occupant renders. That is the framework's design, not a choice this plugin
+makes, and it has two consequences you should know before installing.
+
+### One sidebar plugin at a time
+
+Any other plugin that also takes over the browsing region — a different grouping
+UI, a tabbed sidebar, a replacement session list — competes for the same seat.
+Exactly one of them renders; the others do nothing, and **nothing reports the
+conflict**. If the sidebar does not look the way you expect, disable one of the
+two and reload.
+
+Which one wins is decided by **registration order, not by anything a plugin
+declares**. DSH's browser-half facade allocates each slot's shadowing priority
+itself and overwrites any `priority` a package passes, so no plugin can claim
+precedence. Load order is not a contract you can rely on in either direction.
+
+### Extensions that seat inside a session row still work
+
+The browsing region declares child seats that other plugins register into. A
+plugin that replaces the region must forward those seats itself, or every
+extension seated there silently disappears. This plugin forwards all three:
+
+| Seat | Where it renders |
+|---|---|
+| `sidebar.session.row.leading` | before the session title |
+| `sidebar.session.row.trailing` | after the title, before the timestamp |
+| `sidebar.workspaces.session.row.action` | in the row's action strip |
+
+Each is offered with the `sessionId` (and the display title for the action seat)
+that the shipped browser passes, so an extension cannot tell the difference.
+A seat with nothing registered adds no DOM, and a seat that throws is skipped
+rather than taking the sidebar down.
+
+### Known gaps
+
+Two seats the shipped browser offers are **not** forwarded, because this plugin
+does not build the UI they belong to:
+
+- `sidebar.session.row.hover` — session rows have no hover card here.
+- `sidebar.workspaces.directoryFlow` — there is no directory-flow step.
+
+Extensions that target those two specific seats will not render. Everything in
+the right-click session menu (`contextMenu`) is unaffected and works normally.
+
 ## Limitations
 
 - A workspace belongs to at most **one** category; categories do not nest.

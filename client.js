@@ -35,8 +35,16 @@ window.__ModuleLoader__.load({
     const NS = 'workspaceSkin'
     /** Host route serving the category document (see index.js). */
     const DOC_ROUTE = '/api/workspace-categories.doc'
-    /** Lower than the shipped browser's implicit 0, so this entry wins the slot. */
-    const SHADOW_PRIORITY = -1000
+    /**
+     * Child slots the shipped browser renders inside its session rows. Declaring
+     * them here means an extension that targets one keeps working, instead of
+     * silently losing its seat because this package replaced the browser.
+     */
+    const CHILD_SLOTS = Object.freeze({
+      leading: 'sidebar.session.row.leading',
+      trailing: 'sidebar.session.row.trailing',
+      action: 'sidebar.workspaces.session.row.action',
+    })
     /** How long a press holds before a drag starts. */
     const LONG_PRESS_MS = 180
     /** Movement that cancels the pending long press (a scroll or a click). */
@@ -609,7 +617,7 @@ window.__ModuleLoader__.load({
     function WorkspaceSkin(props) {
       const {
         wide, expandSidebar, useSessions, useWorkspaces, useSessionStatus, usePanelInfo,
-        useContextMenu, t, actions, docStore, saveStore,
+        useContextMenu, renderSlot, t, actions, docStore, saveStore,
       } = props
       const doc = React.useSyncExternalStore(docStore.subscribe, docStore.get, docStore.get)
       const saveFailure = React.useSyncExternalStore(saveStore.subscribe, saveStore.get, saveStore.get)
@@ -618,6 +626,30 @@ window.__ModuleLoader__.load({
       const statuses = useSessionStatus(state => state)
       const panelActive = usePanelInfo(info => info.activePanelId !== null)
       const { getTriggerProps } = useContextMenu()
+
+      /**
+       * Render one child slot the shipped browser would have rendered. This package
+       * replaces the whole browsing region, so an extension that seats itself in a
+       * session row loses its host unless we reproduce those seats.
+       * @param key - child slot key.
+       * @param slotProps - props the shipped browser passes to that seat.
+       * @returns the seated entries, or null when the seat is unavailable.
+       */
+      const childSlot = (key, slotProps) => {
+        if (typeof renderSlot !== 'function') return null
+        try {
+          const rendered = renderSlot(key, slotProps)
+          /* An empty array means nobody is seated; emitting a wrapper would add
+             dead flex items to every row. */
+          if (rendered === null || rendered === undefined) return null
+          if (Array.isArray(rendered) && rendered.length === 0) return null
+          return rendered
+        } catch {
+          /* A seat that is not declared in this build must not take the sidebar
+             down; the row simply renders without it. */
+          return null
+        }
+      }
 
       const [query, setQuery] = React.useState('')
       const [menu, setMenu] = React.useState(null)
@@ -1312,6 +1344,18 @@ window.__ModuleLoader__.load({
            until a baseline or event establishes one, so fall back to the summary's
            own `running` flag the way the shipped tree does. */
         const running = !archived && (status?.running ?? summary.running) === true
+        /* Resolve the child seats once. A seat with nothing in it must emit no
+           wrapper at all, or every row carries three dead flex cells. */
+        const seats = summary.blank
+          ? { leading: null, trailing: null, action: null }
+          : {
+            leading: childSlot(CHILD_SLOTS.leading, { sessionId: summary.id }),
+            trailing: childSlot(CHILD_SLOTS.trailing, { sessionId: summary.id }),
+            action: childSlot(CHILD_SLOTS.action, {
+              sessionId: summary.id,
+              displayTitle: summary.displayTitle,
+            }),
+          }
         const classes = ['wsx-session']
         if (summary.id === currentSessionId) classes.push('wsx-session-selected')
         if (archived) classes.push('wsx-session-archived')
@@ -1349,8 +1393,18 @@ window.__ModuleLoader__.load({
         status?.pendingInteraction === undefined
           ? null
           : h('span', { className: 'wsx-session-flag' }, t('session.awaiting')),
+        /* Leading decoration sits in its own cell, matching the shipped row's
+           16px seat so an extension's icon does not shift our title. */
+        archived || seats.leading === null
+          ? null
+          : h('span', { className: 'wsx-session-leading' }, seats.leading),
         h('span', { className: 'wsx-session-title' },
           summary.blank ? t('session.new') : summary.displayTitle),
+        /* Trailing icons and extra row actions belong to extensions; the
+           timestamp and our spinner stay ours. */
+        seats.trailing === null
+          ? null
+          : h('span', { className: 'wsx-session-trailing' }, seats.trailing),
         running
           ? h('span', {
             className: 'wsx-spinner',
@@ -1358,7 +1412,15 @@ window.__ModuleLoader__.load({
             'aria-label': t('session.running'),
             title: t('session.running'),
           })
-          : h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)))
+          : h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)),
+        seats.action === null
+          ? null
+          : h('span', {
+            className: 'wsx-session-actions',
+            /* Clicks in the action strip act on the row's controls, never open
+               the session, so an extension's button needs no propagation work. */
+            onClick: (event) => { event.stopPropagation() },
+          }, seats.action))
       }
 
       /**
@@ -1982,6 +2044,26 @@ window.__ModuleLoader__.load({
 }
 .wsx-session-flag { flex: 0 0 auto; color: var(--dsw-alias-state-warn-primary); font-size: 11px; }
 .wsx-session-time { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+/* Seats for extension entries. The row emits these wrappers only when an entry
+   is actually seated, so a row with no extension looks exactly as before. */
+.wsx-session-leading {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+.wsx-session-trailing {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+.wsx-session-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
 /* A running session replaces its timestamp with a spinner. Without these rules
    the element has no size or colour and is invisible, which is exactly how it
    shipped broken once. */
@@ -2608,7 +2690,9 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
           name: 'sidebar.workspaces',
           id: 'workspace-categories',
-          priority: SHADOW_PRIORITY,
+          /* No `priority`: the browser-half facade allocates one for every
+             non-chain slot and overwrites whatever a package passes, so a value
+             here would be dead weight that invites false assumptions. */
           locale: NS,
           inject: () => ({ actions, docStore: store, saveStore }),
         }, WorkspaceSkin))

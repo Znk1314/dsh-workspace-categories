@@ -27,6 +27,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Compatibility:** this package replaces the whole browsing region, which
+  silently evicted every extension seated inside a session row. It now forwards
+  `sidebar.session.row.leading`, `sidebar.session.row.trailing` and
+  `sidebar.workspaces.session.row.action` with the same props the shipped
+  browser passes, so those extensions keep rendering. Empty seats add no DOM and
+  a throwing seat is skipped instead of taking the sidebar down.
+- The `priority: -1000` on the registration was dead weight: DSH's browser-half
+  facade allocates every non-chain slot's shadowing priority itself and
+  overwrites whatever a package passes. It is removed rather than left in place
+  implying control over precedence that does not exist.
+
 - The running-session spinner had **no CSS at all**. The row emitted a
   `.wsx-spinner` element but no `.wsx-spinner` rule and no `@keyframes`
   existed, so it rendered with zero size and zero colour — invisible. Both are

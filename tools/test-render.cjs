@@ -84,7 +84,11 @@ if (entry === null) {
   console.log(failures + ' CHECK(S) FAILED')
   process.exit(1)
 }
-ok('the entry shadows the shipped browser', entry.options.priority < 0)
+/* The browser-half facade allocates the shadowing priority itself and overwrites
+   whatever a package passes, so a package-supplied value is dead weight and a
+   false promise. Assert we do not pass one. */
+ok('the entry does not pass a priority', entry.options.priority === undefined)
+ok('the entry seats into the browsing region', entry.options.name === 'sidebar.workspaces')
 
 // --- render each tab with realistic state ----------------------------------
 const face = entry.options.inject()
@@ -144,9 +148,19 @@ const propsFor = (tab, overrides = {}) => {
     useSessionStatus: selector => selector(new Map()),
     usePanelInfo: selector => selector({ activePanelId: null }),
     useContextMenu: () => ({ getTriggerProps: () => ({}) }),
+    /* A spy: this package replaced the shipped browser, so whether it still
+       offers the child seats is exactly what needs proving. */
+    renderSlot: (key, slotProps) => {
+      if (overrides.renderSlot !== undefined) return overrides.renderSlot(key, slotProps)
+      slotCalls.push({ key, slotProps })
+      return null
+    },
     ...overrides.rest,
   }
 }
+
+/** Recorded child-slot seats; reset before each tab. */
+const slotCalls = []
 
 /** Walk a rendered tree, counting the rows a tab produced. */
 const count = (tree, predicate) => {
@@ -206,6 +220,47 @@ for (const tab of tabs) {
   console.log(tab + ': bars=' + bars + ' rows=' + rows + ' guides=' + guides
     + ' chips=' + chips + ' spinners=' + spinners + ' times=' + times)
 }
+
+// --- the child seats the shipped browser offered ---------------------------
+/* Replacing the browsing region silently evicts every extension that seats
+   itself inside a session row. These seats must keep being offered. */
+slotCalls.length = 0
+entry.component(propsFor('categories'))
+const seatedKeys = new Set(slotCalls.map(call => call.key))
+const SEATS = [
+  'sidebar.session.row.leading',
+  'sidebar.session.row.trailing',
+  'sidebar.workspaces.session.row.action',
+]
+for (const seat of SEATS) {
+  ok('the row offers the ' + seat + ' seat', seatedKeys.has(seat))
+}
+/* Every call must carry the session it belongs to, or an extension cannot tell
+   its rows apart. */
+const missingId = slotCalls.filter(call => typeof call.slotProps?.sessionId !== 'string')
+ok('every seat call names its session', missingId.length === 0)
+/* The row action seat also carries the display title, as the shipped one does. */
+const actionCalls = slotCalls.filter(call => call.key === 'sidebar.workspaces.session.row.action')
+ok('the action seat carries a display title',
+  actionCalls.every(call => typeof call.slotProps?.displayTitle === 'string'))
+
+/* A seat that throws, or that this build does not declare, must not take the
+   sidebar down. */
+try {
+  const tree = entry.component(propsFor('categories', {
+    renderSlot: () => { throw new Error('undeclared seat') },
+  }))
+  ok('a throwing seat does not break the row', tree !== null)
+} catch (error) {
+  failures++
+  console.log('FAIL a throwing seat broke the render: ' + error.message)
+}
+
+/* With nothing seated, the row must not gain empty flex cells. */
+slotCalls.length = 0
+const bareTree = entry.component(propsFor('categories'))
+ok('empty seats render no wrapper',
+  count(bareTree, c => c.split(' ').includes('wsx-session-leading')) === 0)
 
 // --- the states that must not crash ---------------------------------------
 const emptyProps = propsFor('categories', {
