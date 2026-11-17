@@ -166,6 +166,36 @@ ok('the header pads from that edge', /padding:\s*0 var\(--wsx-inline-left\)/.tes
 ok('the section label uses primary ink',
   /\.wsx-header-title\s*\{[\s\S]*?color:\s*var\(--dsw-alias-label-primary\)/.test(css))
 
+// --- 7. dark theme repaints the category row -------------------------------
+/* A tinted wash of a saturated accent turns muddy on a dark canvas: blue and
+   violet collapse to near-black, red and orange to brown. In dark mode the row
+   keeps its shape but switches recipe to a neutral raised surface with an accent
+   hairline, and the glyph carries the colour instead of the fill. */
+ok('dark theme uses a neutral surface',
+  /body\[data-ds-dark-theme\][^{]*\.wsx-cat-head[\s\S]{0,200}background:\s*var\(--dsw-alias-bg-layer-1\)/.test(css))
+ok('dark theme draws an accent hairline',
+  /body\[data-ds-dark-theme\][^{]*\.wsx-cat-head[\s\S]{0,300}box-shadow:\s*inset 0 0 0 1px color-mix/.test(css))
+ok('dark theme keeps the glyph accent-coloured',
+  /body\[data-ds-dark-theme\][^{]*\.wsx-cat-glyph[\s\S]{0,140}color:\s*var\(--wsx-accent\)/.test(css))
+ok('the footer buckets get no accent border',
+  /body\[data-ds-dark-theme\][^{]*\.wsx-bar-footer[\s\S]{0,200}var\(--dsw-alias-border-l1\)/.test(css))
+
+// --- 8. one trailing cell: dot, spinner, or timestamp ----------------------
+/* A turn that stopped to ask the user outranks a running turn, and both replace
+   the timestamp rather than sitting beside it, so the right edge never grows. */
+ok('the row renders one trailing cell', /className:\s*'wsx-session-tail'/.test(css))
+const awaitDot = css.match(/\n\.wsx-await-dot\s*\{([\s\S]*?)\}/)
+ok('the awaiting dot is styled', awaitDot !== null)
+if (awaitDot !== null) {
+  ok('the dot is warn-orange', /background:\s*var\(--dsw-alias-state-warn-primary\)/.test(awaitDot[1]))
+  ok('the dot is round', /border-radius:\s*50%/.test(awaitDot[1]))
+  ok('the dot is small', /width:\s*8px/.test(awaitDot[1]))
+}
+check('the old left-hand text flag is gone', /\.wsx-session-flag/.test(css), false)
+ok('awaiting is resolved before running', /const awaiting = [^\n]*pendingInteraction/.test(css))
+ok('awaiting outranks running in the tail',
+  /awaiting\s*\n\s*\?[\s\S]{0,260}wsx-await-dot[\s\S]{0,420}wsx-spinner/.test(css))
+
 console.log('columns: guide=' + guideX + 'px folder=' + wsPad + 'px title=' + titleCol + 'px')
 console.log(failures === 0 ? 'ALL LAYOUT CHECKS PASSED' : failures + ' CHECK(S) FAILED')
 process.exitCode = failures === 0 ? 0 : 1

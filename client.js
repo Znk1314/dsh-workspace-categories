@@ -1430,6 +1430,9 @@ window.__ModuleLoader__.load({
            until a baseline or event establishes one, so fall back to the summary's
            own `running` flag the way the shipped tree does. */
         const running = !archived && (status?.running ?? summary.running) === true
+        /* A turn that stopped to ask the user is not running, and it is the state
+           that most needs attention, so it outranks the spinner. */
+        const awaiting = !archived && status?.pendingInteraction !== undefined
         /* Resolve the child seats once. A seat with nothing in it must emit no
            wrapper at all, or every row carries three dead flex cells. */
         const seats = summary.blank
@@ -1476,9 +1479,6 @@ window.__ModuleLoader__.load({
           },
           ...trigger,
         },
-        status?.pendingInteraction === undefined
-          ? null
-          : h('span', { className: 'wsx-session-flag' }, t('session.awaiting')),
         /* Leading decoration sits in its own cell, matching the shipped row's
            16px seat so an extension's icon does not shift our title. */
         archived || seats.leading === null
@@ -1491,14 +1491,26 @@ window.__ModuleLoader__.load({
         seats.trailing === null
           ? null
           : h('span', { className: 'wsx-session-trailing' }, seats.trailing),
-        running
-          ? h('span', {
-            className: 'wsx-spinner',
-            role: 'status',
-            'aria-label': t('session.running'),
-            title: t('session.running'),
-          })
-          : h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t)),
+        archived ? null : h('span', { className: 'wsx-session-tail' },
+          /* One trailing state, never two: waiting on the user outranks running,
+             because a paused turn is the thing that needs attention. Each state
+             replaces the timestamp rather than sitting beside it, so the row's
+             right edge never grows. */
+          awaiting
+            ? h('span', {
+              className: 'wsx-await-dot',
+              role: 'status',
+              'aria-label': t('session.awaiting'),
+              title: t('session.awaiting'),
+            })
+            : running
+              ? h('span', {
+                className: 'wsx-spinner',
+                role: 'status',
+                'aria-label': t('session.running'),
+                title: t('session.running'),
+              })
+              : h('span', { className: 'wsx-session-time' }, timeLabel(summary.updatedAt, now, t))),
         seats.action === null
           ? null
           : h('span', {
@@ -1946,6 +1958,28 @@ window.__ModuleLoader__.load({
 .wsx-tone-violet { --wsx-accent: var(--dsw-static-violet-600); --wsx-accent-strong: var(--dsw-static-violet-600); }
 .wsx-tone-pink { --wsx-accent: #ec4899; --wsx-accent-strong: #db2777; }
 .wsx-tone-slate { --wsx-accent: var(--dsw-alias-state-idle-primary); --wsx-accent-strong: var(--dsw-alias-label-secondary); }
+/* Dark theme: a tinted wash of a saturated accent turns muddy on a dark canvas —
+   blue and violet go navy-black, red and orange go brown. The category row keeps
+   the SAME shape but changes its recipe: a neutral raised surface, a hairline
+   border in the accent, and the accent kept for the glyph and the count only. */
+body[data-ds-dark-theme] .wsx-cat-head {
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wsx-accent) 32%, transparent);
+}
+body[data-ds-dark-theme] .wsx-cat-head:hover {
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wsx-accent) 48%, transparent);
+}
+/* The tint is what carries the category's identity in light mode, so in dark mode
+   the glyph has to work harder: full-strength accent, never a dimmed neutral. */
+body[data-ds-dark-theme] .wsx-cat-glyph {
+  color: var(--wsx-accent);
+}
+/* The footer buckets are not user categories; no accent border for them. */
+body[data-ds-dark-theme] .wsx-bar-footer .wsx-cat-head {
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l1);
+}
 /* The tinted rounded rectangle belongs to the category's own row. Its workspaces
    and sessions sit on the plain sidebar surface below it. */
 .wsx-cat-head {
@@ -2137,7 +2171,26 @@ window.__ModuleLoader__.load({
   font-size: 14px;
   line-height: 20px;
 }
-.wsx-session-flag { flex: 0 0 auto; color: var(--dsw-alias-state-warn-primary); font-size: 11px; }
+/* The trailing state cell: exactly one of dot, spinner or timestamp lives here. */
+.wsx-session-tail {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 12px;
+}
+/* A turn waiting on the user. Orange-amber, and it replaces the timestamp in the
+   same cell the spinner uses, so nothing shifts and nothing is said twice. */
+.wsx-await-dot {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-warn-primary);
+  /* A halo keeps a small dot legible on both themes without enlarging it. */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent);
+}
 .wsx-session-time { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 /* Seats for extension entries. The row emits these wrappers only when an entry
    is actually seated, so a row with no extension looks exactly as before. */

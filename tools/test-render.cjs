@@ -160,7 +160,7 @@ const propsFor = (tab, overrides = {}) => {
       items: workspaces, archivedSessionIds: [], pinnedSessionIds: [], phase: 'ready', state: 'idle',
     }),
     useSessions: selector => selector(sessions),
-    useSessionStatus: selector => selector(new Map()),
+    useSessionStatus: selector => selector(overrides.statuses ?? new Map()),
     usePanelInfo: selector => selector({ activePanelId: null }),
     useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     /* A spy: this package replaced the shipped browser, so whether it still
@@ -234,6 +234,7 @@ for (const tab of tabs) {
   /* s1 runs via its summary flag with no status-map entry: the spinner must
      appear, and it must REPLACE that row's timestamp rather than join it. */
   ok('a running session shows a spinner (' + spinners + ')', spinners === 1)
+  ok('no awaiting dot while nothing waits', count(tree, c => c.split(' ').includes('wsx-await-dot')) === 0)
   ok('the running row drops its timestamp', times === rows - 1)
   console.log(tab + ': bars=' + bars + ' rows=' + rows + ' guides=' + guides
     + ' chips=' + chips + ' spinners=' + spinners + ' times=' + times)
@@ -297,6 +298,25 @@ findBoundary(seatedTree)
 ok('a seated extension is wrapped in a boundary (' + boundaryCount + ')', boundaryCount > 0)
 ok('the seated content still renders',
   count(seatedTree, c => c.split(' ').includes('ext-entry')) > 0)
+
+// --- a turn that stopped to ask the user -----------------------------------
+/* The reported behaviour: a session waiting on a choice must show the orange dot
+   in the trailing cell, not a left-hand "waiting" label, and the dot must beat
+   the running spinner because nothing is running while the user is deciding. */
+const awaitingTree = entry.component(propsFor('categories', {
+  statuses: new Map([
+    ['s2', { running: true, pendingInteraction: { kind: 'question' }, completionUnread: false }],
+  ]),
+}))
+ok('an awaiting session shows the orange dot',
+  count(awaitingTree, c => c.split(' ').includes('wsx-await-dot')) === 1)
+ok('no left-hand flag is rendered', !/wsx-session-flag/.test(source))
+/* s1 still runs, so exactly one spinner survives; s2's spinner yielded to the dot. */
+ok('the awaiting row yields its spinner',
+  count(awaitingTree, c => c.split(' ').includes('wsx-spinner')) === 1)
+ok('the awaiting row drops its timestamp',
+  count(awaitingTree, c => c.split(' ').includes('wsx-session-time')) ===
+    count(awaitingTree, c => c.split(' ').includes('wsx-session')) - 2)
 
 // --- the states that must not crash ---------------------------------------
 /* A dynamic browser half may receive no slot renderer at all. The row must still

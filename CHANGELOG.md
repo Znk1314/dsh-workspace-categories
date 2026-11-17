@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Dark theme repaints the category row.** A 13% tint of a saturated accent
+  turns muddy on a dark canvas: blue and violet collapse toward near-black, red
+  and orange toward brown. Under `body[data-ds-dark-theme]` the row keeps its
+  shape but switches recipe — a neutral raised surface, a 1px accent hairline,
+  and the accent moved into the glyph, which is the only element that should
+  carry colour there. The footer buckets get a plain border instead of an accent
+  one, since they are not user categories.
+- **A session waiting on the user shows one orange dot in the trailing cell,**
+  replacing the timestamp exactly where the running spinner appears. The old
+  left-hand "待处理" label is gone, so the row no longer grows a second marker on
+  its leading edge. Waiting outranks running: nothing is running while a turn is
+  paused for an answer.
+
 - A category is now one rounded rectangle filled with a light tint of its
   accent (the band and its glyph carry the colour), replacing the left colour
   strip. Its workspaces and sessions hang below on an indent guide, so the
