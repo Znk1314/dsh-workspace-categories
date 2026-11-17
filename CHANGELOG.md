@@ -124,6 +124,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`README.zh.md`**, because the DSH plugin market reads its Chinese card
+  intro from that exact filename. The repository only had `README.zh-CN.md`,
+  which the market never fetches, so the card would have shown no Chinese
+  summary at all. It is a thin entry pointing at the full document rather than a
+  second copy, so the two cannot drift.
+- `package.json` keywords now carry the plain `dsh-plugin` token the npm side of
+  that market searches for, alongside the GitHub topics already on the repo.
+
 - **`npm test`** runs all eight suites in one command (`tools/run-all.mjs`),
   and `.github/workflows/tests.yml` runs the same thing on Node 22 and 24 for
   every push and pull request. The README carries the badge.

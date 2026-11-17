@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-categories",
   "version": "1.0.0",
-  "description": "Group the DSH sidebar's workspaces into coloured, draggable rounded-box categories with long-press reordering and pinning.",
+  "description": "Group the DSH sidebar workspaces into custom categories: All/Recent/Categories views, two-level folding, long-press drag to file. No more endless scrolling to find a session.",
   "type": "module",
   "scripts": {
     "test": "node tools/run-all.mjs"
@@ -17,9 +17,11 @@
   },
   "homepage": "https://github.com/Znk1314/dsh-workspace-categories#readme",
   "keywords": [
-    "dsh",
     "dsh-plugin",
+    "dsh",
     "deepseek-harness",
+    "deepseek-harness-plugin",
+    "dsh-desktop",
     "sidebar",
     "workspace",
     "categories",
@@ -41,6 +43,7 @@
     "docs/preview.png",
     "icon.svg",
     "README.md",
+    "README.zh.md",
     "README.zh-CN.md",
     "LICENSE"
   ],
